@@ -5,7 +5,7 @@ Pod::Spec.new do |s|
   s.summary = 'Rad Media Capture in Swift'
   s.homepage = 'https://github.com/nextlevel/NextLevel'
   s.authors = { 'patrick piemonte' => 'patrick.piemonte@gmail.com' }
-  s.source = { :git => 'https://github.com/nextlevel/NextLevel.git', :tag => s.version }
+  s.source = { :git => 'git@github.com:Aicoco-coder/NextLevel.git', :tag => s.version }
   s.documentation_url = 'https://nextlevel.github.io/NextLevel/'
   s.ios.deployment_target = '14.0'
   s.source_files = 'Sources/*.swift'

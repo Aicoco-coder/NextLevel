@@ -33,6 +33,19 @@ import Metal
 import ARKit
 #endif
 
+//public protocol AVCaptureVideoPreivewLayerProtocol: NSObjectProtocol {
+//    var session: AVCaptureSession? { get set }
+//    var connection: AVCaptureConnection? { get }
+//    var videoGravity:AVLayerVideoGravity { get set }
+//    func captureDevicePointConverted(fromLayerPoint pointInLayer: CGPoint) -> CGPoint
+//    func layerPointConverted(fromCaptureDevicePoint captureDevicePointOfInterest: CGPoint) -> CGPoint
+//    func transformedMetadataObject(for metadataObject: AVMetadataObject) -> AVMetadataObject?
+//}
+//
+//extension AVCaptureVideoPreviewLayer: AVCaptureVideoPreivewLayerProtocol {
+//    
+//}
+
 // MARK: - types
 
 public enum NextLevelAuthorizationStatus: Int, CustomStringConvertible {
@@ -246,7 +259,7 @@ public class NextLevel: NSObject {
     // preview
 
     /// Live camera preview, add as a sublayer to the UIView's primary layer.
-    public var previewLayer: AVCaptureVideoPreviewLayer
+    public var previewLayer: AVCaptureVideoPreviewLayer?
 
     // capture configuration
 
@@ -459,7 +472,7 @@ public class NextLevel: NSObject {
 
     override public init() {
         self.previewLayer = AVCaptureVideoPreviewLayer()
-        self.previewLayer.videoGravity = AVLayerVideoGravity.resizeAspectFill
+        self.previewLayer?.videoGravity = AVLayerVideoGravity.resizeAspectFill
 
         self._sessionQueue = DispatchQueue(label: NextLevelCaptureSessionQueueIdentifier, qos: .userInteractive, target: DispatchQueue.global())
         self._sessionQueue.setSpecific(key: NextLevelCaptureSessionQueueSpecificKey, value: ())
@@ -501,7 +514,7 @@ public class NextLevel: NSObject {
             self.commitConfiguration()
         }
 
-        self.previewLayer.session = nil
+        self.previewLayer?.session = nil
 
         self._currentDevice = nil
 
@@ -646,7 +659,7 @@ extension NextLevel {
                 session.automaticallyConfiguresApplicationAudioSession = self.automaticallyConfiguresApplicationAudioSession
 
                 self.beginConfiguration()
-                self.previewLayer.session = session
+                self.previewLayer?.session = session
 
                 self.configureSession()
                 self.configureSessionDevices()
@@ -1271,14 +1284,14 @@ extension NextLevel {
 
     /// Freezes the live camera preview layer.
     public func freezePreview() {
-        if let previewConnection = self.previewLayer.connection {
+        if let previewConnection = self.previewLayer?.connection {
             previewConnection.isEnabled = false
         }
     }
 
     /// Un-freezes the live camera preview layer.
     public func unfreezePreview() {
-        if let previewConnection = self.previewLayer.connection {
+        if let previewConnection = self.previewLayer?.connection {
             previewConnection.isEnabled = true
         }
     }
@@ -1338,7 +1351,7 @@ extension NextLevel {
         var didChangeOrientation = false
 		let currentOrientation = self.deviceDelegate?.nextLevelCurrentDeviceOrientation?() ?? AVCaptureVideoOrientation.avorientationFromUIDeviceOrientation(UIDevice.current.orientation)
 
-        if let previewConnection = self.previewLayer.connection {
+        if let previewConnection = self.previewLayer?.connection {
             if previewConnection.isVideoOrientationSupported && previewConnection.videoOrientation != currentOrientation {
                 previewConnection.videoOrientation = currentOrientation
                 didChangeOrientation = true
@@ -1384,7 +1397,7 @@ extension NextLevel {
     /// Changes the current capture device's mirroring mode.
     public var mirroringMode: NextLevelMirroringMode {
         get {
-            if let pc = self.previewLayer.connection {
+            if let pc = self.previewLayer?.connection {
                 if pc.isVideoMirroringSupported {
                     if !pc.automaticallyAdjustsVideoMirroring {
                         return pc.isVideoMirrored ? .on : .off
@@ -1409,7 +1422,7 @@ extension NextLevel {
                         vc.isVideoMirrored = false
                     }
                 }
-                if let pc = self.previewLayer.connection {
+                if let pc = self.previewLayer?.connection {
                     if pc.isVideoMirroringSupported {
                         pc.automaticallyAdjustsVideoMirroring = false
                         pc.isVideoMirrored = false
@@ -1422,7 +1435,7 @@ extension NextLevel {
                         vc.isVideoMirrored = true
                     }
                 }
-                if let pc = self.previewLayer.connection {
+                if let pc = self.previewLayer?.connection {
                     if pc.isVideoMirroringSupported {
                         pc.automaticallyAdjustsVideoMirroring = false
                         pc.isVideoMirrored = true
@@ -1435,7 +1448,7 @@ extension NextLevel {
                         vc.isVideoMirrored = (device.position == .front)
                     }
                 }
-                if let pc = self.previewLayer.connection {
+                if let pc = self.previewLayer?.connection {
                     if pc.isVideoMirroringSupported {
                         pc.automaticallyAdjustsVideoMirroring = true
                     }
@@ -2466,20 +2479,74 @@ extension NextLevel {
 
     /// Initiates video recording, managed as a clip within the 'NextLevelSession'
     public func record() {
-        self.executeClosureSyncOnSessionQueueIfNecessary {
-            self._recording = true
-            if let _ = self._recordingSession {
-                self.beginRecordingNewClipIfNecessary()
+        self._recording = true
+        DispatchQueue.global().async {
+            if let session = self._recordingSession {
+                var count = 0
+                while !(session.isAudioSetup && session.isVideoSetup) && count < 5 { // < 500ms
+                    Thread.sleep(forTimeInterval: 0.1) // 100ms
+                    count += 1
+                }
+                self.executeClosureSyncOnSessionQueueIfNecessary {
+                    self.beginRecordingNewClipIfNecessary()
+                }
             }
         }
+    }
+    
+    public func stopRecord(with fileName: String, completion: ((URL?, Error?)->Void)?) {
+        if let session = self._recordingSession {
+            self.pause { [weak self] in
+                guard let self = self else {
+                    let error = NSError(domain: NSStringFromClass(NextLevel.self), code: -1, userInfo: [NSLocalizedDescriptionKey: "self is nil"])
+                    completion?(nil, error)
+                    return
+                }
+                let renameAndCompletion: (URL)->Void = { url in
+                    let name = "\(fileName).\(url.pathExtension)"
+                    if let outURL = (url.deletingLastPathComponent() as NSURL).appendingPathComponent(name) {
+                        do {
+                            try FileManager.default.moveItem(at: url, to: outURL)
+                            completion?(outURL, nil)
+                        } catch {
+                            completion?(nil, error)
+                        }
+                    } else {
+                        let error = NSError(domain: NSStringFromClass(NextLevel.self), code: -1, userInfo: [NSLocalizedDescriptionKey: "outURL is nil"])
+                        completion?(nil, error)
+                    }
+                }
+                if session.clips.count > 1 {
+                    session.mergeClips(usingPreset: AVAssetExportPresetHighestQuality, completionHandler: { [weak self] (url: URL?, error: Error?) in
+                        if let url = url {
+                            renameAndCompletion(url)
+                        } else if let error = error {
+                            completion?(nil, error)
+                            print("failed to merge clips at the end of capture \(String(describing: error))")
+                        }
+                        self?._recordingSession?.removeAllClips()
+                    })
+                } else if let lastClipUrl = session.lastClipUrl {
+                    renameAndCompletion(lastClipUrl)
+                    session.removeAllClips()
+                } else {
+                    let error = NSError(domain: NSStringFromClass(NextLevel.self), code: -1, userInfo: [NSLocalizedDescriptionKey: "Not enough video captured!"])
+                    completion?(nil, error)
+                }
+            }
+        }
+
     }
 
     /// Pauses video recording, preparing 'NextLevel' to start a new clip with 'record()' with completion handler.
     ///
     /// - Parameter completionHandler: Completion handler for when pause completes
     public func pause(withCompletionHandler completionHandler: (() -> Void)? = nil) {
+        if !self._recording {
+            completionHandler?()
+            return
+        }
         self._recording = false
-
         self.executeClosureAsyncOnSessionQueueIfNecessary {
             if let session = self._recordingSession {
                 if session.currentClipHasStarted {
@@ -2582,7 +2649,7 @@ extension NextLevel {
     // sample buffer processing
 
     internal func handleVideoOutput(sampleBuffer: CMSampleBuffer, session: NextLevelSession) {
-        if session.isVideoSetup == false {
+        if self._recording && session.isVideoSetup == false {
             if let settings = self.videoConfiguration.avcaptureSettingsDictionary(sampleBuffer: sampleBuffer),
                 let formatDescription = CMSampleBufferGetFormatDescription(sampleBuffer) {
                 if !session.setupVideo(withSettings: settings, configuration: self.videoConfiguration, formatDescription: formatDescription) {
@@ -2657,7 +2724,7 @@ extension NextLevel {
 
     // Beta: handleVideoOutput(pixelBuffer:timestamp:session:) needs to be tested
     internal func handleVideoOutput(pixelBuffer: CVPixelBuffer, timestamp: TimeInterval, session: NextLevelSession) {
-        if session.isVideoSetup == false {
+        if self._recording && session.isVideoSetup == false {
             if let settings = self.videoConfiguration.avcaptureSettingsDictionary(pixelBuffer: pixelBuffer) {
                 if !session.setupVideo(withSettings: settings, configuration: self.videoConfiguration) {
                     print("NextLevel, could not setup video session")
@@ -2725,7 +2792,7 @@ extension NextLevel {
     }
 
     internal func handleAudioOutput(sampleBuffer: CMSampleBuffer, session: NextLevelSession) {
-        if session.isAudioSetup == false {
+        if self._recording && session.isAudioSetup == false {
             if let settings = self.audioConfiguration.avcaptureSettingsDictionary(sampleBuffer: sampleBuffer),
                 let formatDescription = CMSampleBufferGetFormatDescription(sampleBuffer) {
                 if !session.setupAudio(withSettings: settings, configuration: self.audioConfiguration, formatDescription: formatDescription) {
@@ -2789,19 +2856,27 @@ extension NextLevel: AVCaptureVideoDataOutputSampleBufferDelegate, AVCaptureAudi
     public func captureOutput(_ captureOutput: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {
         if (self.captureMode == .videoWithoutAudio ||  self.captureMode == .arKitWithoutAudio) &&
             captureOutput == self._videoOutput {
-            self.videoDelegate?.nextLevel(self, willProcessRawVideoSampleBuffer: sampleBuffer, onQueue: self._sessionQueue)
-            self._lastVideoFrame = sampleBuffer
+            var processedSampleBuffer = sampleBuffer;
+            if let videoDelegate = self.videoDelegate,
+                let sBuffer = videoDelegate.nextLevel(self, willProcessRawVideoSampleBuffer: sampleBuffer, onQueue: self._sessionQueue) {
+                processedSampleBuffer = sBuffer
+            }
+            self._lastVideoFrame = processedSampleBuffer
             if let session = self._recordingSession {
-                self.handleVideoOutput(sampleBuffer: sampleBuffer, session: session)
+                self.handleVideoOutput(sampleBuffer: processedSampleBuffer, session: session)
             }
         } else if let videoOutput = self._videoOutput,
             let audioOutput = self._audioOutput {
             switch captureOutput {
             case videoOutput:
-                self.videoDelegate?.nextLevel(self, willProcessRawVideoSampleBuffer: sampleBuffer, onQueue: self._sessionQueue)
-                self._lastVideoFrame = sampleBuffer
+                var processedSampleBuffer = sampleBuffer;
+                if let videoDelegate = self.videoDelegate,
+                    let sBuffer = videoDelegate.nextLevel(self, willProcessRawVideoSampleBuffer: sampleBuffer, onQueue: self._sessionQueue) {
+                    processedSampleBuffer = sBuffer
+                }
+                self._lastVideoFrame = processedSampleBuffer
                 if let session = self._recordingSession {
-                    self.handleVideoOutput(sampleBuffer: sampleBuffer, session: session)
+                    self.handleVideoOutput(sampleBuffer: processedSampleBuffer, session: session)
                 }
                 break
             case audioOutput:
@@ -2943,7 +3018,7 @@ extension NextLevel: AVCaptureMetadataOutputObjectsDelegate {
     public func metadataOutput(_ output: AVCaptureMetadataOutput, didOutput metadataObjects: [AVMetadataObject], from connection: AVCaptureConnection) {
         // convert metadata object coordinates to preview layer coordinates
         let convertedMetadataObjects = metadataObjects.compactMap { metadataObject in
-            self.previewLayer.transformedMetadataObject(for: metadataObject)
+            self.previewLayer?.transformedMetadataObject(for: metadataObject) ?? metadataObject
         }
 
         // main queue is explicitly specified during configuration

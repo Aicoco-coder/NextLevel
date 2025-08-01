@@ -271,8 +271,11 @@ extension NextLevelSession {
             videoInput.expectsMediaDataInRealTime = true
             videoInput.transform = configuration.transform
             self._videoConfiguration = configuration
-
-            var pixelBufferAttri: [String: Any] = [String(kCVPixelBufferPixelFormatTypeKey): Int(kCVPixelFormatType_420YpCbCr8BiPlanarFullRange)]
+            var formatType = kCVPixelFormatType_420YpCbCr8BiPlanarFullRange
+            if let formatDescription = formatDescription {
+                formatType = CMFormatDescriptionGetMediaSubType(formatDescription)
+            }
+            var pixelBufferAttri: [String: Any] = [String(kCVPixelBufferPixelFormatTypeKey): Int(formatType)]
 
             if let formatDescription = formatDescription {
                 let videoDimensions = CMVideoFormatDescriptionGetDimensions(formatDescription)
@@ -306,7 +309,7 @@ extension NextLevelSession {
     }
 
     internal func setupWriter() {
-        guard let url = self.nextFileURL() else {
+        guard let url = self.nextFileURL(), isAudioSetup, isVideoSetup else {
             return
         }
 
@@ -354,6 +357,13 @@ extension NextLevelSession {
         self._currentClipDuration = CMTime.zero
         self._currentClipHasVideo = false
         self._currentClipHasAudio = false
+        // llh add
+        self._videoInput = nil
+        self._audioInput = nil
+        self._pixelBufferAdapter = nil
+        self._skippedAudioBuffers = []
+        self._videoConfiguration = nil
+        self._audioConfiguration = nil
     }
 }
 
@@ -538,6 +548,7 @@ extension NextLevelSession {
             } else {
                 print("NextLevel, clip has already been created.")
             }
+            
         }
     }
 
