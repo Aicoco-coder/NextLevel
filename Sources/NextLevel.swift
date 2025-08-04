@@ -1360,7 +1360,7 @@ extension NextLevel {
 
         if let videoOutput = self._videoOutput, let videoConnection = videoOutput.connection(with: AVMediaType.video) {
             if videoConnection.isVideoOrientationSupported && videoConnection.videoOrientation != currentOrientation {
-                videoConnection.videoOrientation = currentOrientation
+                //videoConnection.videoOrientation = currentOrientation
                 didChangeOrientation = true
             }
         }
