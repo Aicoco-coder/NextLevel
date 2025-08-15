@@ -72,8 +72,8 @@ extension CMSampleBuffer {
 
 }
 
-private let NextLevelMetadataTitle = "NextLevel"
-private let NextLevelMetadataArtist = "http://github.com/NextLevel/"
+private let NextLevelMetadataTitle = "ReefColor"
+private let NextLevelMetadataArtist = "ReefColor"
 
 extension NextLevel {
 

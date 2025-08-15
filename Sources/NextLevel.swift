@@ -410,6 +410,12 @@ public class NextLevel: NSObject {
             return self._ciContext
         }
     }
+    
+    public var currentDevice: AVCaptureDevice? {
+        get {
+            self._currentDevice
+        }
+    }
 
     // MARK: - private instance vars
 
@@ -788,7 +794,7 @@ extension NextLevel {
 
             if let requestedDevice = self._requestedDevice {
                 captureDevice = requestedDevice
-            } else if let videoDevice = AVCaptureDevice.primaryVideoDevice(forPosition: self.devicePosition) {
+            } else if let videoDevice = AVCaptureDevice.wideAngleVideoDevice(forPosition: self.devicePosition) {
                 captureDevice = videoDevice
             }
 
@@ -881,6 +887,7 @@ extension NextLevel {
             }
 
             _ = self.addPhotoOutput()
+            _ = self.addVideoOutput()
             #if USE_TRUE_DEPTH
             if self.depthDataCaptureEnabled {
                 _ = self.addDepthDataOutput()
@@ -1098,6 +1105,11 @@ extension NextLevel {
         if let session = self._captureSession, let photoOutput = self._photoOutput {
             if session.canAddOutput(photoOutput) {
                 session.addOutput(photoOutput)
+                if self.photoConfiguration.isRawCaptureEnabled {
+                    if #available(iOS 14.3, *) {
+                        photoOutput.isAppleProRAWEnabled = photoOutput.isAppleProRAWSupported
+                    }
+                }
                 self.addCaptureOutputObservers()
                 return true
             }
@@ -1221,18 +1233,18 @@ extension NextLevel {
             }
             break
         case .photo:
-            if let videoOutput = self._videoOutput, session.outputs.contains(videoOutput) {
-                session.removeOutput(videoOutput)
-                self._videoOutput = nil
-            }
+//            if let videoOutput = self._videoOutput, session.outputs.contains(videoOutput) {
+//                session.removeOutput(videoOutput)
+//                self._videoOutput = nil
+//            }
             if let audioOutput = self._audioOutput, session.outputs.contains(audioOutput) {
                 session.removeOutput(audioOutput)
                 self._audioOutput = nil
             }
-            if let metadataOutput = self._metadataOutput, session.outputs.contains(metadataOutput) {
-                session.removeOutput(metadataOutput)
-                self._metadataOutput = nil
-            }
+//            if let metadataOutput = self._metadataOutput, session.outputs.contains(metadataOutput) {
+//                session.removeOutput(metadataOutput)
+//                self._metadataOutput = nil
+//            }
             break
         case .audio:
             if let videoOutput = self._videoOutput, session.outputs.contains(videoOutput) {
@@ -1329,6 +1341,7 @@ extension NextLevel {
 
     /// Changes capture device if the desired device is available.
     public func changeCaptureDeviceIfAvailable(captureDevice: NextLevelDeviceType) throws {
+        print("changeCaptureDeviceIfAvailable:\(captureDevice.description)")
         let deviceForUse = AVCaptureDevice.captureDevice(withType: captureDevice.avfoundationType, forPosition: self.devicePosition)
         if deviceForUse == nil {
             throw NextLevelError.deviceNotAvailable
@@ -2542,10 +2555,6 @@ extension NextLevel {
     ///
     /// - Parameter completionHandler: Completion handler for when pause completes
     public func pause(withCompletionHandler completionHandler: (() -> Void)? = nil) {
-        if !self._recording {
-            completionHandler?()
-            return
-        }
         self._recording = false
         self.executeClosureAsyncOnSessionQueueIfNecessary {
             if let session = self._recordingSession {
@@ -2605,31 +2614,53 @@ extension NextLevel {
         }
 
         if let formatDictionary = self.photoConfiguration.avcaptureDictionary() {
-
-            #if !( targetEnvironment(simulator) )
+            var photoSettings: AVCapturePhotoSettings
             if self.photoConfiguration.isRawCaptureEnabled {
-//                if let _ = photoOutput.availableRawPhotoPixelFormatTypes.first {
-//                    // TODO
-//                }
-            }
-            #endif
+                var rawFormat = photoOutput.availableRawPhotoPixelFormatTypes.first
+                if #available(iOS 14.3, *) {
+                    let query = photoOutput.isAppleProRAWEnabled ?
+                    { AVCapturePhotoOutput.isAppleProRAWPixelFormat($0) } :
+                    { AVCapturePhotoOutput.isBayerRAWPixelFormat($0) }
+                    if let format = photoOutput.availableRawPhotoPixelFormatTypes.first(where: query) {
+                        rawFormat = format
+                    }
+                }
+                guard let rawFormat = rawFormat else { return }
+                // Capture a RAW format photo, along with a processed format photo.
+                //let processedFormat = [AVVideoCodecKey: AVVideoCodecType.hevc]
+                photoSettings = AVCapturePhotoSettings(rawPixelFormatType: rawFormat)
+                if self.photoConfiguration.generateThumbnail {
+                    if let thumbnailPhotoCodecType = photoSettings.availableRawEmbeddedThumbnailPhotoCodecTypes.first {
+                        photoSettings.rawEmbeddedThumbnailPhotoFormat = [
+                            AVVideoCodecKey: thumbnailPhotoCodecType,
+                        ]
+                    }
+                }
+            } else {
+                photoSettings = AVCapturePhotoSettings(format: formatDictionary)
+                if self.photoConfiguration.generateThumbnail {
+                    if let thumbnailPhotoCodecType = photoSettings.availableEmbeddedThumbnailPhotoCodecTypes.first {
+                        photoSettings.embeddedThumbnailPhotoFormat = [
+                            AVVideoCodecKey: thumbnailPhotoCodecType,
+                        ]
+                    }
+                }
+                photoSettings.isHighResolutionPhotoEnabled = self.photoConfiguration.isHighResolutionEnabled
+                photoOutput.isHighResolutionCaptureEnabled = self.photoConfiguration.isHighResolutionEnabled
 
-            let photoSettings = AVCapturePhotoSettings(format: formatDictionary)
-            photoSettings.isHighResolutionPhotoEnabled = self.photoConfiguration.isHighResolutionEnabled
-            photoOutput.isHighResolutionCaptureEnabled = self.photoConfiguration.isHighResolutionEnabled
+                photoSettings.photoQualityPrioritization = photoConfiguration.photoQualityPrioritization
+                photoOutput.maxPhotoQualityPrioritization = photoConfiguration.photoQualityPrioritization
 
-			photoSettings.photoQualityPrioritization = photoConfiguration.photoQualityPrioritization
-			photoOutput.maxPhotoQualityPrioritization = photoConfiguration.photoQualityPrioritization
+                #if USE_TRUE_DEPTH
+                if photoOutput.isDepthDataDeliverySupported {
+                    photoOutput.isDepthDataDeliveryEnabled = self.photoConfiguration.isDepthDataEnabled
+                    photoSettings.embedsDepthDataInPhoto = self.photoConfiguration.isDepthDataEnabled
+                }
+                #endif
 
-            #if USE_TRUE_DEPTH
-            if photoOutput.isDepthDataDeliverySupported {
-                photoOutput.isDepthDataDeliveryEnabled = self.photoConfiguration.isDepthDataEnabled
-                photoSettings.embedsDepthDataInPhoto = self.photoConfiguration.isDepthDataEnabled
-            }
-            #endif
-
-            if photoOutput.isPortraitEffectsMatteDeliverySupported {
-                photoOutput.isPortraitEffectsMatteDeliveryEnabled = self.photoConfiguration.isPortraitEffectsMatteEnabled
+                if photoOutput.isPortraitEffectsMatteDeliverySupported {
+                    photoOutput.isPortraitEffectsMatteDeliveryEnabled = self.photoConfiguration.isPortraitEffectsMatteEnabled
+                }
             }
 
             if self.isFlashAvailable {
@@ -2854,7 +2885,11 @@ extension NextLevel {
 extension NextLevel: AVCaptureVideoDataOutputSampleBufferDelegate, AVCaptureAudioDataOutputSampleBufferDelegate {
 
     public func captureOutput(_ captureOutput: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {
-        if (self.captureMode == .videoWithoutAudio ||  self.captureMode == .arKitWithoutAudio) &&
+        if self.captureMode == .photo && captureOutput == self._videoOutput {
+            if let videoDelegate = self.videoDelegate {
+                videoDelegate.nextLevel(self, willProcessRawVideoSampleBuffer: sampleBuffer, onQueue: self._sessionQueue)
+            }
+        } else if (self.captureMode == .videoWithoutAudio ||  self.captureMode == .arKitWithoutAudio) &&
             captureOutput == self._videoOutput {
             var processedSampleBuffer = sampleBuffer;
             if let videoDelegate = self.videoDelegate,
