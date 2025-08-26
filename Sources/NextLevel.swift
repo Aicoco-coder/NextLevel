@@ -298,6 +298,7 @@ public class NextLevel: NSObject {
             self.delegate?.nextLevelCaptureModeWillChange(self)
 
             self.executeClosureAsyncOnSessionQueueIfNecessary {
+                self._requestedDevice = self._currentDevice;
                 self.configureSession()
                 self.configureSessionDevices()
                 self.configureMetadataObjects()
@@ -794,6 +795,7 @@ extension NextLevel {
 
             if let requestedDevice = self._requestedDevice {
                 captureDevice = requestedDevice
+                self._requestedDevice = nil
             } else if let videoDevice = AVCaptureDevice.wideAngleVideoDevice(forPosition: self.devicePosition) {
                 captureDevice = videoDevice
             }
@@ -812,7 +814,6 @@ extension NextLevel {
                     self.willChangeValue(forKey: "currentDevice")
                     self._currentDevice = captureDevice
                     self.didChangeValue(forKey: "currentDevice")
-                    self._requestedDevice = nil
 
                     if changingPosition {
                         DispatchQueue.main.async {
@@ -1376,12 +1377,18 @@ extension NextLevel {
                 videoConnection.videoOrientation = currentOrientation
                 didChangeOrientation = true
             }
+            if videoConnection.isVideoMirroringSupported {
+                videoConnection.isVideoMirrored = devicePosition == .front
+            }
         }
 
         if let photoOutput = self._photoOutput, let photoConnection = photoOutput.connection(with: AVMediaType.video) {
             if photoConnection.isVideoOrientationSupported && photoConnection.videoOrientation != currentOrientation {
                 photoConnection.videoOrientation = currentOrientation
                 didChangeOrientation = true
+            }
+            if photoConnection.isVideoMirroringSupported {
+                photoConnection.isVideoMirrored = devicePosition == .front
             }
         }
 
