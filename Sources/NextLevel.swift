@@ -615,17 +615,19 @@ extension NextLevel {
             setupARSession()
         #endif
         default:
-            guard self._captureSession == nil else {
-                throw NextLevelError.started
+            self.executeClosureAsyncOnSessionQueueIfNecessary {
+                guard self._captureSession == nil else {
+                    return
+                }
+                self.setupAVSession()
             }
-            setupAVSession()
         }
     }
 
     /// Stops the current recording session.
     public func stop() {
-        if let session = self._captureSession {
-            self.executeClosureAsyncOnSessionQueueIfNecessary {
+        self.executeClosureAsyncOnSessionQueueIfNecessary {
+            if let session = self._captureSession {
                 if session.isRunning == true {
                     session.stopRunning()
                 }
@@ -640,7 +642,6 @@ extension NextLevel {
                 self._currentDevice = nil
             }
         }
-
         #if USE_ARKIT
         if self.captureMode == .arKit || self.captureMode == .arKitWithoutAudio {
             self.executeClosureAsyncOnSessionQueueIfNecessary {
