@@ -530,9 +530,9 @@ public class NextLevel: NSObject {
 
         self.sharedCIContext = nil
     }
-    public var logFunc: ((String)->Void)?
-    func log(_ string: String) -> Void {
-        logFunc?(string)
+    public var logFunc: ((String, String, UInt, String)->Void)?
+    func log(_ string: String, file: String = #file, line: UInt = #line, function: String = #function) -> Void {
+        logFunc?(string, file, line, function)
     }
 }
 
@@ -624,6 +624,7 @@ extension NextLevel {
                     self.log("---> guard self._captureSession == nil")
                     return
                 }
+                self.log("---> guard self._captureSession != nil")
                 self.setupAVSession()
             }
         }
@@ -871,7 +872,7 @@ extension NextLevel {
                 if session.canSetSessionPreset(self.videoConfiguration.preset) {
                     session.sessionPreset = self.videoConfiguration.preset
                 } else {
-                    print("NextLevel, could not set preset on session")
+                    log("NextLevel, could not set preset on session")
                 }
             }
 
@@ -890,7 +891,7 @@ extension NextLevel {
                 if session.canSetSessionPreset(self.photoConfiguration.preset) {
                     session.sessionPreset = self.photoConfiguration.preset
                 } else {
-                    print("NextLevel, could not set preset on session")
+                    log("NextLevel, could not set preset on session")
                 }
             }
 
@@ -990,7 +991,7 @@ extension NextLevel {
                 }
                 captureDevice.unlockForConfiguration()
             } catch {
-                print("NextLevel, low light failed to lock device for configuration")
+                log("NextLevel, low light failed to lock device for configuration")
             }
         }
 
@@ -1022,7 +1023,7 @@ extension NextLevel {
                 return true
             }
         } catch {
-            print("NextLevel, failure adding input device")
+            log("NextLevel, failure adding input device")
         }
         return false
     }
@@ -1081,7 +1082,7 @@ extension NextLevel {
                 return true
             }
         }
-        print("NextLevel, couldn't add video output to session")
+        log("NextLevel, couldn't add video output to session")
         return false
 
     }
@@ -1099,7 +1100,7 @@ extension NextLevel {
                 return true
             }
         }
-        print("NextLevel, couldn't add audio output to session")
+        log("NextLevel, couldn't add audio output to session")
         return false
 
     }
@@ -1122,7 +1123,7 @@ extension NextLevel {
                 return true
             }
         }
-        print("NextLevel, couldn't add photo output to session")
+        log("NextLevel, couldn't add photo output to session")
         return false
 
     }
@@ -1154,7 +1155,7 @@ extension NextLevel {
                 return true
             }
         }
-        print("NextLevel, couldn't add movie output to session")
+        log("NextLevel, couldn't add movie output to session")
         return false
 
     }
@@ -1180,7 +1181,7 @@ extension NextLevel {
                 }
             }
         }
-        print("NextLevel, couldn't add depth data output to session")
+        log("NextLevel, couldn't add depth data output to session")
         return false
     }
     #endif
@@ -1199,7 +1200,7 @@ extension NextLevel {
             photoOutput.isPortraitEffectsMatteDeliveryEnabled = true
             return true
         }
-        print("NextLevel, couldn't enable portrait effects matte delivery in the output")
+        log("NextLevel, couldn't enable portrait effects matte delivery in the output")
         return false
     }
 
@@ -1349,7 +1350,7 @@ extension NextLevel {
 
     /// Changes capture device if the desired device is available.
     public func changeCaptureDeviceIfAvailable(captureDevice: NextLevelDeviceType) throws {
-        print("changeCaptureDeviceIfAvailable:\(captureDevice.description)")
+        log("changeCaptureDeviceIfAvailable:\(captureDevice.description)")
         let deviceForUse = AVCaptureDevice.captureDevice(withType: captureDevice.avfoundationType, forPosition: self.devicePosition)
         if deviceForUse == nil {
             throw NextLevelError.deviceNotAvailable
@@ -1557,7 +1558,7 @@ extension NextLevel {
                     }
                     device.unlockForConfiguration()
                 } catch {
-                    print("NextLevel, torchMode failed to lock device for configuration")
+                    self.log("NextLevel, torchMode failed to lock device for configuration")
                 }
             }
         }
@@ -1623,7 +1624,7 @@ extension NextLevel {
                     device.focusMode = newValue
                     device.unlockForConfiguration()
                 } catch {
-                    print("NextLevel, focusMode failed to lock device for configuration")
+                    self.log("NextLevel, focusMode failed to lock device for configuration")
                 }
             }
         }
@@ -1654,7 +1655,7 @@ extension NextLevel {
 
                 device.unlockForConfiguration()
             } catch {
-                print("NextLevel, lens position failed to lock device for configuration")
+                log("NextLevel, lens position failed to lock device for configuration")
             }
         }
     }
@@ -1695,7 +1696,7 @@ extension NextLevel {
 
             device.unlockForConfiguration()
         } catch {
-            print("NextLevel, focusExposeAndAdjustWhiteBalance failed to lock device for configuration")
+            log("NextLevel, focusExposeAndAdjustWhiteBalance failed to lock device for configuration")
         }
     }
 
@@ -1721,7 +1722,7 @@ extension NextLevel {
 
             device.unlockForConfiguration()
         } catch {
-            print("NextLevel, focusAtAdjustedPointOfInterest failed to lock device for configuration")
+            log("NextLevel, focusAtAdjustedPointOfInterest failed to lock device for configuration")
         }
     }
 
@@ -1781,7 +1782,7 @@ extension NextLevel {
 
                 device.unlockForConfiguration()
             } catch {
-                print("NextLevel, exposureMode failed to lock device for configuration")
+                log("NextLevel, exposureMode failed to lock device for configuration")
             }
         }
     }
@@ -1807,7 +1808,7 @@ extension NextLevel {
 
             device.unlockForConfiguration()
         } catch {
-            print("NextLevel, exposeAtAdjustedPointOfInterest failed to lock device for configuration")
+            log("NextLevel, exposeAtAdjustedPointOfInterest failed to lock device for configuration")
         }
     }
 
@@ -1841,7 +1842,7 @@ extension NextLevel {
 
             device.unlockForConfiguration()
         } catch {
-            print("NextLevel, setExposureModeCustom failed to lock device for configuration")
+            log("NextLevel, setExposureModeCustom failed to lock device for configuration")
         }
     }
 
@@ -1866,7 +1867,7 @@ extension NextLevel {
 
             device.unlockForConfiguration()
         } catch {
-            print("NextLevel, setExposureModeCustom failed to lock device for configuration")
+            log("NextLevel, setExposureModeCustom failed to lock device for configuration")
         }
     }
 
@@ -1891,7 +1892,7 @@ extension NextLevel {
 
             device.unlockForConfiguration()
         } catch {
-            print("NextLevel, setExposureTargetBias failed to lock device for configuration")
+            self.log("NextLevel, setExposureTargetBias failed to lock device for configuration")
         }
     }
 
@@ -1939,7 +1940,7 @@ extension NextLevel {
                     device.whiteBalanceMode = newValue
                     device.unlockForConfiguration()
                 } catch {
-                    print("NextLevel, whiteBalanceMode failed to lock device for configuration")
+                    self.log("NextLevel, whiteBalanceMode failed to lock device for configuration")
                 }
             }
         }
@@ -1971,7 +1972,7 @@ extension NextLevel {
                     device.deviceWhiteBalanceGains(for: temperatureAndTint)
                     device.unlockForConfiguration()
                 } catch {
-                    print("NextLevel, deviceWhiteBalanceGains failed to lock device for configuration")
+                    self.log("NextLevel, deviceWhiteBalanceGains failed to lock device for configuration")
                 }
             }
         }
@@ -2001,7 +2002,7 @@ extension NextLevel {
                     device.deviceWhiteBalanceGains(for: temperatureAndTint)
                     device.unlockForConfiguration()
                 } catch {
-                    print("NextLevel, deviceWhiteBalanceGains failed to lock device for configuration")
+                    self.log("NextLevel, deviceWhiteBalanceGains failed to lock device for configuration")
                 }
             }
         }
@@ -2024,7 +2025,7 @@ extension NextLevel {
 
             device.unlockForConfiguration()
         } catch {
-            print("NextLevel, setWhiteBalanceModeLocked failed to lock device for configuration")
+            log("NextLevel, setWhiteBalanceModeLocked failed to lock device for configuration")
         }
     }
 
@@ -2100,7 +2101,7 @@ extension NextLevel {
 
                 device.unlockForConfiguration()
             } catch {
-                print("NextLevel, focus ending failed to lock device for configuration")
+                log("NextLevel, focus ending failed to lock device for configuration")
             }
         }
 
@@ -2132,7 +2133,7 @@ extension NextLevel {
 
                 device.unlockForConfiguration()
             } catch {
-                print("NextLevel, focus ending failed to lock device for configuration")
+                log("NextLevel, focus ending failed to lock device for configuration")
             }
         }
 
@@ -2182,7 +2183,7 @@ extension NextLevel {
                 }
                 guard device.activeFormat.isSupported(withFrameRate: newValue)
                     else {
-                        print("unsupported frame rate for current device format config, \(newValue) fps")
+                    self.log("unsupported frame rate for current device format config, \(newValue) fps")
                         return
                 }
 
@@ -2195,7 +2196,7 @@ extension NextLevel {
 
                     device.unlockForConfiguration()
                 } catch {
-                    print("NextLevel, frame rate failed to lock device for configuration")
+                    self.log("NextLevel, frame rate failed to lock device for configuration")
                 }
             }
         }
@@ -2254,10 +2255,10 @@ extension NextLevel {
                         self.deviceDelegate?.nextLevel(self, didChangeDeviceFormat: format)
                     }
                 } catch {
-                    print("NextLevel, active device format failed to lock device for configuration")
+                    self.log("NextLevel, active device format failed to lock device for configuration")
                 }
             } else {
-                print("Nextlevel, could not find a current device format matching the requirements")
+                self.log("Nextlevel, could not find a current device format matching the requirements")
             }
 
         }
@@ -2298,7 +2299,7 @@ extension NextLevel {
                     device.unlockForConfiguration()
                 } catch {
                     // Handle error.
-                    print("NextLevel, failed to lock device on the highest frame rate")
+                    self.log("NextLevel, failed to lock device on the highest frame rate")
                 }
             }
         }
@@ -2346,8 +2347,8 @@ extension NextLevel {
             return 1.0 // prefer 1.0 instead of using an optional
         }
         set {
-            self.executeClosureAsyncOnSessionQueueIfNecessary {
-                if let device = self._currentDevice {
+            self.executeClosureAsyncOnSessionQueueIfNecessary { [weak self] in
+                if let device = self?._currentDevice {
                     do {
                         try device.lockForConfiguration()
 
@@ -2355,7 +2356,7 @@ extension NextLevel {
 
                         device.unlockForConfiguration()
                     } catch {
-                        print("NextLevel, zoomFactor failed to lock device for configuration")
+                        self?.log("NextLevel, zoomFactor failed to lock device for configuration")
                     }
                 }
             }
@@ -2549,7 +2550,7 @@ extension NextLevel {
                             renameAndCompletion(url)
                         } else if let error = error {
                             completion?(nil, error)
-                            print("failed to merge clips at the end of capture \(String(describing: error))")
+                            self?.log("failed to merge clips at the end of capture \(String(describing: error))")
                         }
                         self?._recordingSession?.removeAllClips()
                     })
@@ -2704,7 +2705,7 @@ extension NextLevel {
             if let settings = self.videoConfiguration.avcaptureSettingsDictionary(sampleBuffer: sampleBuffer),
                 let formatDescription = CMSampleBufferGetFormatDescription(sampleBuffer) {
                 if !session.setupVideo(withSettings: settings, configuration: self.videoConfiguration, formatDescription: formatDescription) {
-                    print("NextLevel, could not setup video session")
+                    log("NextLevel, could not setup video session")
                 }
             }
             DispatchQueue.main.async {
@@ -2778,7 +2779,7 @@ extension NextLevel {
         if self._recording && session.isVideoSetup == false {
             if let settings = self.videoConfiguration.avcaptureSettingsDictionary(pixelBuffer: pixelBuffer) {
                 if !session.setupVideo(withSettings: settings, configuration: self.videoConfiguration) {
-                    print("NextLevel, could not setup video session")
+                    log("NextLevel, could not setup video session")
                 }
             }
             DispatchQueue.main.async {
@@ -2847,7 +2848,7 @@ extension NextLevel {
             if let settings = self.audioConfiguration.avcaptureSettingsDictionary(sampleBuffer: sampleBuffer),
                 let formatDescription = CMSampleBufferGetFormatDescription(sampleBuffer) {
                 if !session.setupAudio(withSettings: settings, configuration: self.audioConfiguration, formatDescription: formatDescription) {
-                    print("NextLevel, could not setup audio session")
+                    log("NextLevel, could not setup audio session")
                 }
             }
 
@@ -3164,7 +3165,7 @@ extension NextLevel {
             if let error = notification.userInfo?[AVCaptureSessionErrorKey] as? AVError {
                 switch error.code {
                 case .deviceIsNotAvailableInBackground:
-                    print("NextLevel, error, media services are not available in the background")
+                    self.log("NextLevel, error, media services are not available in the background")
                     break
                 case .mediaServicesWereReset:
                     fallthrough
@@ -3394,7 +3395,7 @@ extension NextLevel {
 
                     captureDevice.unlockForConfiguration()
                 } catch {
-                    print("NextLevel, failed to lock device for white balance exposure configuration")
+                    self?.log("NextLevel, failed to lock device for white balance exposure configuration")
                 }
             }
 
