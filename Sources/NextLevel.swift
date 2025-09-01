@@ -530,6 +530,10 @@ public class NextLevel: NSObject {
 
         self.sharedCIContext = nil
     }
+    public var logFunc: ((String)->Void)?
+    func log(_ string: String) -> Void {
+        logFunc?(string)
+    }
 }
 
 // MARK: - authorization
@@ -617,6 +621,7 @@ extension NextLevel {
         default:
             self.executeClosureAsyncOnSessionQueueIfNecessary {
                 guard self._captureSession == nil else {
+                    self.log("---> guard self._captureSession == nil")
                     return
                 }
                 self.setupAVSession()
@@ -640,6 +645,7 @@ extension NextLevel {
                 self._recordingSession = nil
                 self._captureSession = nil
                 self._currentDevice = nil
+                self.log("--->self._captureSession = nil")
             }
         }
         #if USE_ARKIT
@@ -2674,7 +2680,13 @@ extension NextLevel {
             if self.isFlashAvailable {
                 photoSettings.flashMode = self.photoConfiguration.flashMode
             }
-
+            if #available(iOS 18.0, *) {
+                if photoOutput.isShutterSoundSuppressionSupported {
+                    photoSettings.isShutterSoundSuppressionEnabled = true
+                }
+            } else {
+                // Fallback on earlier versions
+            }
             photoOutput.capturePhoto(with: photoSettings, delegate: self)
         }
     }
