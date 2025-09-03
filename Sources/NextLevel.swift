@@ -398,6 +398,12 @@ public class NextLevel: NSObject {
             self._recordingSession
         }
     }
+    
+    public var captureSession : AVCaptureSession? {
+        get {
+            self._captureSession
+        }
+    }
 
     /// Shared Core Image rendering context.
     public var sharedCIContext: CIContext? {
@@ -626,6 +632,25 @@ extension NextLevel {
                 }
                 self.log("---> guard self._captureSession != nil")
                 self.setupAVSession()
+            }
+        }
+    }
+    
+    public func pause(_ pause: Bool) {
+        self.executeClosureAsyncOnSessionQueueIfNecessary {
+            guard let session = self._captureSession else  {
+                return
+            }
+            if pause {
+                if session.isRunning == true {
+                    self.log("stopRunning")
+                    session.stopRunning()
+                }
+            } else {
+                if session.isRunning == false {
+                    session.startRunning()
+                    self.log("startRunning")
+                }
             }
         }
     }
