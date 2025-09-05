@@ -90,6 +90,7 @@ public protocol NextLevelDeviceDelegate: AnyObject {
 	var nextLevelCurrentDeviceOrientation: (() -> AVCaptureVideoOrientation)? { get }
     func nextLevelDevicePositionWillChange(_ nextLevel: NextLevel)
     func nextLevelDevicePositionDidChange(_ nextLevel: NextLevel)
+    func nextLevelDeviceDidChange(_ nextLevel: NextLevel)
     func nextLevel(_ nextLevel: NextLevel, didChangeDeviceOrientation deviceOrientation: NextLevelDeviceOrientation)
 
     // format
@@ -109,7 +110,8 @@ public protocol NextLevelDeviceDelegate: AnyObject {
 
     func nextLevelWillChangeWhiteBalance(_ nextLevel: NextLevel)
     func nextLevelDidChangeWhiteBalance(_ nextLevel: NextLevel)
-
+    
+    func nextLevel(_ nextLevel: NextLevel, didChangeExposureTargetBias exposureTargetBias: Float)
 }
 
 public extension NextLevelDeviceDelegate {

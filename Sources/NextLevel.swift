@@ -847,7 +847,9 @@ extension NextLevel {
                     self.willChangeValue(forKey: "currentDevice")
                     self._currentDevice = captureDevice
                     self.didChangeValue(forKey: "currentDevice")
-
+                    DispatchQueue.main.async {
+                        self.deviceDelegate?.nextLevelDeviceDidChange(self)
+                    }
                     if changingPosition {
                         DispatchQueue.main.async {
                             self.deviceDelegate?.nextLevelDevicePositionDidChange(self)
@@ -1699,9 +1701,9 @@ extension NextLevel {
         do {
             try device.lockForConfiguration()
 
-            let focusMode: AVCaptureDevice.FocusMode = .autoFocus
-            let exposureMode: AVCaptureDevice.ExposureMode = .continuousAutoExposure
-            let whiteBalanceMode: AVCaptureDevice.WhiteBalanceMode = .continuousAutoWhiteBalance
+            let focusMode: AVCaptureDevice.FocusMode = self.focusMode
+            let exposureMode: AVCaptureDevice.ExposureMode = self.exposureMode
+            let whiteBalanceMode: AVCaptureDevice.WhiteBalanceMode = self.whiteBalanceMode
 
             if device.isFocusPointOfInterestSupported && device.isFocusModeSupported(focusMode) {
                 device.focusPointOfInterest = adjustedPoint
@@ -3350,12 +3352,13 @@ extension NextLevel {
             // TODO: add delegate callback
         })
 
-        self._observers.append(currentDevice.observe(\.exposureTargetBias, options: [.new]) { [weak self] _, _ in
-            guard let _ = self else {
+        self._observers.append(currentDevice.observe(\.exposureTargetBias, options: [.new]) { [weak self] _, change in
+            guard let self = self, let newValue = change.newValue else {
                 return
             }
-
-            // TODO: add delegate callback
+            DispatchQueue.main.async {
+                self.deviceDelegate?.nextLevel(self, didChangeExposureTargetBias: newValue)
+            }
         })
 
         self._observers.append(currentDevice.observe(\.exposureTargetOffset, options: [.new]) { [weak self] _, _ in
