@@ -1741,10 +1741,9 @@ extension NextLevel {
         do {
             try device.lockForConfiguration()
 
-            if device.isFocusPointOfInterestSupported && device.isFocusModeSupported(.autoFocus) {
-                let focusMode = device.focusMode
+            if device.isFocusPointOfInterestSupported && device.isFocusModeSupported(self.focusMode) {
                 device.focusPointOfInterest = adjustedPoint
-                device.focusMode = focusMode
+                device.focusMode = self.focusMode
             }
 
             device.unlockForConfiguration()
