@@ -303,7 +303,9 @@ public class NextLevel: NSObject {
                 self.configureSessionDevices()
                 self.configureMetadataObjects()
                 self.updateVideoOrientation()
-                self.delegate?.nextLevelCaptureModeDidChange(self)
+                DispatchQueue.main.async {                
+                    self.delegate?.nextLevelCaptureModeDidChange(self)
+                }
             }
         }
     }
