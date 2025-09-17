@@ -3175,20 +3175,21 @@ extension NextLevel {
     }
 
     @objc internal func handleSessionDidStartRunning(_ notification: Notification) {
-        // self.performRecoveryCheckIfNecessary()
-        // TODO
+        self.log("notification:\(notification)")
         DispatchQueue.main.async {
             self.delegate?.nextLevelSessionDidStart(self)
         }
     }
 
     @objc internal func handleSessionDidStopRunning(_ notification: Notification) {
+        self.log("notification:\(notification)")
         DispatchQueue.main.async {
             self.delegate?.nextLevelSessionDidStop(self)
         }
     }
 
     @objc internal func handleSessionRuntimeError(_ notification: Notification) {
+        self.log("notification:\(notification)")
         self.executeClosureAsyncOnSessionQueueIfNecessary {
             if let error = notification.userInfo?[AVCaptureSessionErrorKey] as? AVError {
                 switch error.code {
@@ -3206,6 +3207,7 @@ extension NextLevel {
     }
 
     @objc public func handleSessionWasInterrupted(_ notification: Notification) {
+        self.log("notification:\(notification)")
         DispatchQueue.main.async {
             if self._recording {
                 self.delegate?.nextLevelSessionDidStop(self)
@@ -3218,6 +3220,7 @@ extension NextLevel {
     }
 
     @objc public func handleSessionInterruptionEnded(_ notification: Notification) {
+        self.log("notification:\(notification)")
         DispatchQueue.main.async {
             self.delegate?.nextLevelSessionInterruptionEnded(self)
         }
