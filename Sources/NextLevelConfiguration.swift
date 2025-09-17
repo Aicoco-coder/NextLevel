@@ -441,6 +441,8 @@ public class NextLevelPhotoConfiguration: NextLevelConfiguration {
 
     // change flashMode with NextLevel.flashMode
     internal var flashMode: AVCaptureDevice.FlashMode = .off
+    
+    var isShutterSoundSuppressionEnabled: Bool = true
 
     // MARK: - object lifecycle
 

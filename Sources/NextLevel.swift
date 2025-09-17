@@ -2711,7 +2711,7 @@ extension NextLevel {
             }
             if #available(iOS 18.0, *) {
                 if photoOutput.isShutterSoundSuppressionSupported {
-                    photoSettings.isShutterSoundSuppressionEnabled = true
+                    photoSettings.isShutterSoundSuppressionEnabled = self.photoConfiguration.isShutterSoundSuppressionEnabled
                 }
             } else {
                 // Fallback on earlier versions
