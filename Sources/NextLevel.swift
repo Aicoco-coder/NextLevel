@@ -639,15 +639,16 @@ extension NextLevel {
     }
     
     public func pause(_ pause: Bool) {
+        log("pause:\(pause)")
         self.executeClosureAsyncOnSessionQueueIfNecessary {
             guard let session = self._captureSession else  {
                 return
             }
             if pause {
-                if session.isRunning == true {
+                //if session.isRunning == true {
                     self.log("stopRunning")
                     session.stopRunning()
-                }
+                //}
             } else {
                 if session.isRunning == false {
                     session.startRunning()
