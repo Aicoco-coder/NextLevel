@@ -241,7 +241,12 @@ private let NextLevelRequiredMinimumStorageSpaceInBytes: UInt64 = 49999872 // ~4
 
 /// ⬆️ NextLevel, Rad Media Capture in Swift (http://github.com/NextLevel)
 public class NextLevel: NSObject {
-
+    
+    private var defaultFocusMode: NextLevelFocusMode = .continuousAutoFocus
+    private var defaultExposureMode: NextLevelExposureMode = .continuousAutoExposure
+    private var defaultWhiteBalanceMode: NextLevelWhiteBalanceMode = .continuousAutoWhiteBalance
+    public var whiteBalanceTemperatureRange: ClosedRange<Float> = 1800...9800
+    public var whiteBalanceTintRange: ClosedRange<Float> = -150...150
     // delegates
 
     public weak var delegate: NextLevelDelegate?
@@ -999,19 +1004,19 @@ extension NextLevel {
             do {
                 try captureDevice.lockForConfiguration()
 
-                if captureDevice.isFocusModeSupported(.continuousAutoFocus) {
-                    captureDevice.focusMode = .continuousAutoFocus
+                if captureDevice.isFocusModeSupported(defaultFocusMode) {
+                    captureDevice.focusMode = defaultFocusMode//.continuousAutoFocus
                     if captureDevice.isSmoothAutoFocusSupported {
                         captureDevice.isSmoothAutoFocusEnabled = true
                     }
                 }
 
-                if captureDevice.isExposureModeSupported(.continuousAutoExposure) {
-                    captureDevice.exposureMode = .continuousAutoExposure
+                if captureDevice.isExposureModeSupported(defaultExposureMode) {
+                    captureDevice.exposureMode = defaultExposureMode//.continuousAutoExposure
                 }
 
-                if captureDevice.isWhiteBalanceModeSupported(.continuousAutoWhiteBalance) {
-                    captureDevice.whiteBalanceMode = .continuousAutoWhiteBalance
+                if captureDevice.isWhiteBalanceModeSupported(defaultWhiteBalanceMode) {
+                    captureDevice.whiteBalanceMode = defaultWhiteBalanceMode//.continuousAutoWhiteBalance
                 }
 
                 captureDevice.isSubjectAreaChangeMonitoringEnabled = true
@@ -1694,9 +1699,9 @@ extension NextLevel {
     ///
     /// - Parameter adjustedPoint: The point of interest.
     public func focusExposeAndAdjustWhiteBalance(atAdjustedPoint adjustedPoint: CGPoint) {
-        guard let device = self._currentDevice,
-            !device.isAdjustingFocus,
-            !device.isAdjustingExposure
+        guard let device = self._currentDevice
+//            !device.isAdjustingFocus,
+//            !device.isAdjustingExposure
             else {
                 return
         }
@@ -1734,9 +1739,9 @@ extension NextLevel {
     ///
     /// - Parameter adjustedPoint: The point of interest for focus
     public func focusAtAdjustedPointOfInterest(adjustedPoint: CGPoint) {
-        guard let device = self._currentDevice,
-            !device.isAdjustingFocus,
-            !device.isAdjustingExposure
+        guard let device = self._currentDevice
+//            !device.isAdjustingFocus,
+//            !device.isAdjustingExposure
             else {
                 return
         }
@@ -1786,7 +1791,6 @@ extension NextLevel {
             return false
         }
     }
-
     /// The exposure mode of the device.
     public var exposureMode: NextLevelExposureMode {
         get {
@@ -1805,9 +1809,10 @@ extension NextLevel {
 
             do {
                 try device.lockForConfiguration()
-
+                log("设置曝光模式为:\(newValue.rawValue)")
                 device.exposureMode = newValue
-                self.adjustWhiteBalanceForExposureMode(exposureMode: newValue)
+                // 不自设置白平衡
+                // self.adjustWhiteBalanceForExposureMode(exposureMode: newValue)
 
                 device.unlockForConfiguration()
             } catch {
@@ -1847,9 +1852,9 @@ extension NextLevel {
     /// - Parameter durationPower: Larger power values will increase the sensitivity at shorter durations.
     /// - Parameter minDurationRangeLimit: Minimum limitation for duration.
 	/// - Parameter completionHandler: Called at completion.
-    public func expose(withDuration duration: Double, durationPower: Double = 5, minDurationRangeLimit: Double = (1.0 / 1000.0), completionHandler: ((CMTime) -> Void)? = nil) {
+    public func expose(withDuration duration: Double, durationPower: Double = 5, minDurationRangeLimit: Double = (1.0 / 1000.0), force: Bool = false, completionHandler: ((CMTime) -> Void)? = nil) {
         guard let device = self._currentDevice,
-            !device.isAdjustingExposure
+              !device.isAdjustingExposure || force
             else {
                 return
         }
@@ -1874,13 +1879,33 @@ extension NextLevel {
             log("NextLevel, setExposureModeCustom failed to lock device for configuration")
         }
     }
+    
+    public func expose(withDuration duration: Double, force: Bool = false, completionHandler: ((CMTime) -> Void)? = nil) {
+        guard let device = self._currentDevice, !device.isAdjustingExposure || force else {
+                return
+        }
+        log("当前的快门速度:\(device.exposureDuration) -> \(CMTimeGetSeconds(device.exposureDuration)*1000)ms")
+        let newDuration = CMTimeMakeWithSeconds( duration, preferredTimescale: device.exposureDuration.timescale ).clamped(to: device.activeFormat.minExposureDuration...device.activeFormat.maxExposureDuration)
+
+        do {
+            try device.lockForConfiguration()
+            if device.isExposureModeSupported(.custom) {
+                log("设置快门速度为:\(CMTimeGetSeconds(newDuration))秒")
+                device.setExposureModeCustom(duration: newDuration, iso: AVCaptureDevice.currentISO, completionHandler: completionHandler)
+            }
+
+            device.unlockForConfiguration()
+        } catch {
+            log("NextLevel, setExposureModeCustom failed to lock device for configuration")
+        }
+    }
 
     /// Adjusts exposure to a specific custom ISO value.
     ///
     /// - Parameter iso: The exposure ISO value.
-    public func expose(withISO iso: Float) {
+    public func expose(withISO iso: Float, force: Bool = false, completionHandler: ((CMTime) -> Void)? = nil) {
         guard let device = self._currentDevice,
-            !device.isAdjustingExposure
+            !device.isAdjustingExposure || force
             else {
                 return
         }
@@ -1891,7 +1916,8 @@ extension NextLevel {
             try device.lockForConfiguration()
 
 			if device.isExposureModeSupported(.custom) {
-				device.setExposureModeCustom(duration: AVCaptureDevice.currentExposureDuration, iso: newISO, completionHandler: nil)
+                log("设置iso为:\(newISO)")
+				device.setExposureModeCustom(duration: AVCaptureDevice.currentExposureDuration, iso: newISO, completionHandler: completionHandler)
 			}
 
             device.unlockForConfiguration()
@@ -1916,7 +1942,7 @@ extension NextLevel {
 
         do {
             try device.lockForConfiguration()
-
+            log("设置曝光补偿为:\(newTargetBias)")
             device.setExposureTargetBias(newTargetBias, completionHandler: completionHandler)
 
             device.unlockForConfiguration()
@@ -1982,27 +2008,19 @@ extension NextLevel {
             if let device = self._currentDevice {
                 return device.temperatureAndTintValues(for: device.deviceWhiteBalanceGains).temperature
             }
-            return 8000
+            return whiteBalanceTemperatureRange.upperBound
         }
         set {
             self.executeClosureAsyncOnSessionQueueIfNecessary {
-                guard let device = self._currentDevice,
-                    device.isWhiteBalanceModeSupported(.locked),
-                    device.whiteBalanceMode == .locked
-                    else {
+                guard let device = self._currentDevice else {
                         return
                 }
 
-                let newTemperature = newValue.clamped(to: 3000...8000)
+                let newTemperature = newValue.clamped(to: self.whiteBalanceTemperatureRange)
                 let temperatureAndTint = AVCaptureDevice.WhiteBalanceTemperatureAndTintValues(temperature: newTemperature, tint: device.temperatureAndTintValues(for: device.deviceWhiteBalanceGains).tint)
-
-                do {
-                    try device.lockForConfiguration()
-                    device.deviceWhiteBalanceGains(for: temperatureAndTint)
-                    device.unlockForConfiguration()
-                } catch {
-                    self.log("NextLevel, deviceWhiteBalanceGains failed to lock device for configuration")
-                }
+                
+                let newWhiteBalanceGains = device.deviceWhiteBalanceGains(for: temperatureAndTint)
+                self.adjustWhiteBalanceGains(newWhiteBalanceGains)
             }
         }
     }
@@ -2012,27 +2030,18 @@ extension NextLevel {
             if let device = self._currentDevice {
                 return device.temperatureAndTintValues(for: device.deviceWhiteBalanceGains).tint
             }
-            return 150
+            return whiteBalanceTintRange.upperBound
         }
         set {
             self.executeClosureAsyncOnSessionQueueIfNecessary {
-                guard let device = self._currentDevice,
-                    device.isWhiteBalanceModeSupported(.locked),
-                    device.whiteBalanceMode == .locked
-                    else {
-                        return
+                guard let device = self._currentDevice else {
+                    return
                 }
 
-                let newTint = newValue.clamped(to: -150...150)
+                let newTint = newValue.clamped(to: self.whiteBalanceTintRange)
                 let temperatureAndTint = AVCaptureDevice.WhiteBalanceTemperatureAndTintValues(temperature: device.temperatureAndTintValues(for: device.deviceWhiteBalanceGains).temperature, tint: newTint)
-
-                do {
-                    try device.lockForConfiguration()
-                    device.deviceWhiteBalanceGains(for: temperatureAndTint)
-                    device.unlockForConfiguration()
-                } catch {
-                    self.log("NextLevel, deviceWhiteBalanceGains failed to lock device for configuration")
-                }
+                let newWhiteBalanceGains = device.deviceWhiteBalanceGains(for: temperatureAndTint)
+                self.adjustWhiteBalanceGains(newWhiteBalanceGains)
             }
         }
     }
@@ -2040,8 +2049,9 @@ extension NextLevel {
     /// Adjusts white balance gains to custom values.
     ///
     /// - Parameter whiteBalanceGains: Gains values for adjustment.
-    public func adjustWhiteBalanceGains(_ whiteBalanceGains: AVCaptureDevice.WhiteBalanceGains) {
-        guard let device = self._currentDevice else {
+    public func adjustWhiteBalanceGains(_ whiteBalanceGains: AVCaptureDevice.WhiteBalanceGains, completionHandler: ((CMTime) -> Void)? = nil) {
+        guard let device = self._currentDevice, device.isLockingWhiteBalanceWithCustomDeviceGainsSupported else {
+            log("不支持设定白平衡,\(String(describing: currentDevice)), device.isLockingWhiteBalanceWithCustomDeviceGainsSupported = \(String(describing: currentDevice?.isLockingWhiteBalanceWithCustomDeviceGainsSupported))")
             return
         }
 
@@ -2050,7 +2060,7 @@ extension NextLevel {
         do {
             try device.lockForConfiguration()
 
-            device.setWhiteBalanceModeLocked(with: newWhiteBalanceGains, completionHandler: nil)
+            device.setWhiteBalanceModeLocked(with: newWhiteBalanceGains, completionHandler: completionHandler)
 
             device.unlockForConfiguration()
         } catch {
@@ -3375,12 +3385,21 @@ extension NextLevel {
         })
 
         self._observers.append(currentDevice.observe(\.deviceWhiteBalanceGains, options: [.new]) { [weak self] object, _ in
-            guard let _ = self else {
+            guard let self = self else {
                 return
             }
-
-            if object.exposureMode != .locked {
-                // TODO: add delegate callback
+            DispatchQueue.main.async {
+                self.deviceDelegate?.nextLevel(self, didChangeWhiteBalanceGains: object.deviceWhiteBalanceGains)
+            }
+        })
+        
+        self._observers.append(currentDevice.observe(\.whiteBalanceMode, options: [.new]) { [weak self] object, _ in
+            //self?.log("whiteBalanceMode3:\(change), object.whiteBalanceMode:\(object.whiteBalanceMode.rawValue)")
+            guard let self = self else {
+                return
+            }
+            DispatchQueue.main.async {
+                self.deviceDelegate?.nextLevel(self, didChangeWhiteBalanceMode: object.whiteBalanceMode)
             }
         })
 
@@ -3393,6 +3412,7 @@ extension NextLevel {
                 strongSelf.videoDelegate?.nextLevel(strongSelf, didUpdateVideoZoomFactor: strongSelf.videoZoomFactor)
             }
         })
+        
     }
 
     internal func removeCaptureDeviceObservers(_ currentDevice: AVCaptureDevice) {
@@ -3411,26 +3431,26 @@ extension NextLevel {
             guard let strongSelf = self else {
                 return
             }
-
-            guard let captureDevice = strongSelf._currentDevice else {
-                return
-            }
-
-            // adjust white balance mode depending on the scene
-            let whiteBalanceMode = strongSelf.whiteBalanceModeBestForExposureMode(exposureMode: captureDevice.exposureMode)
-            let currentWhiteBalanceMode = captureDevice.whiteBalanceMode
-
-            if whiteBalanceMode != currentWhiteBalanceMode {
-                do {
-                    try captureDevice.lockForConfiguration()
-
-                    strongSelf.adjustWhiteBalanceForExposureMode(exposureMode: captureDevice.exposureMode)
-
-                    captureDevice.unlockForConfiguration()
-                } catch {
-                    self?.log("NextLevel, failed to lock device for white balance exposure configuration")
-                }
-            }
+// 不自动调整白平衡
+//            guard let captureDevice = strongSelf._currentDevice else {
+//                return
+//            }
+//
+//            // adjust white balance mode depending on the scene
+//            let whiteBalanceMode = strongSelf.whiteBalanceModeBestForExposureMode(exposureMode: captureDevice.exposureMode)
+//            let currentWhiteBalanceMode = captureDevice.whiteBalanceMode
+//
+//            if whiteBalanceMode != currentWhiteBalanceMode {
+//                do {
+//                    try captureDevice.lockForConfiguration()
+//
+//                    strongSelf.adjustWhiteBalanceForExposureMode(exposureMode: captureDevice.exposureMode)
+//
+//                    captureDevice.unlockForConfiguration()
+//                } catch {
+//                    self?.log("NextLevel, failed to lock device for white balance exposure configuration")
+//                }
+//            }
 
             DispatchQueue.main.async {
                 strongSelf.flashDelegate?.nextLevelFlashActiveChanged(strongSelf)
