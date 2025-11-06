@@ -1581,8 +1581,8 @@ extension NextLevel {
         set {
             self.executeClosureAsyncOnSessionQueueIfNecessary {
                 guard let device = self._currentDevice,
-                    device.hasTorch,
-                    device.torchMode != newValue
+                    device.hasTorch/*,
+                    device.torchMode != newValue*/
                     else {
                         return
                 }
