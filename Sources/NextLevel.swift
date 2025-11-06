@@ -1738,7 +1738,7 @@ extension NextLevel {
     /// Changes focus at adjusted point of interest.
     ///
     /// - Parameter adjustedPoint: The point of interest for focus
-    public func focusAtAdjustedPointOfInterest(adjustedPoint: CGPoint) {
+    public func focusAtAdjustedPointOfInterest(adjustedPoint: CGPoint, focusMode: AVCaptureDevice.FocusMode) {
         guard let device = self._currentDevice
 //            !device.isAdjustingFocus,
 //            !device.isAdjustingExposure
@@ -1749,14 +1749,27 @@ extension NextLevel {
         do {
             try device.lockForConfiguration()
 
-            if device.isFocusPointOfInterestSupported && device.isFocusModeSupported(self.focusMode) {
+            if device.isFocusPointOfInterestSupported && device.isFocusModeSupported(focusMode) {
                 device.focusPointOfInterest = adjustedPoint
-                device.focusMode = self.focusMode
+                device.focusMode = focusMode
             }
 
             device.unlockForConfiguration()
         } catch {
             log("NextLevel, focusAtAdjustedPointOfInterest failed to lock device for configuration")
+        }
+    }
+    
+    public func updateConfiguration(update: (AVCaptureDevice)->Void) {
+        guard let device = self._currentDevice else {
+            return
+        }
+        do {
+            try device.lockForConfiguration()
+            update(device)
+            device.unlockForConfiguration()
+        } catch {
+            log("NextLevel, updateConfiguration failed to lock device for configuration")
         }
     }
 
@@ -1824,7 +1837,7 @@ extension NextLevel {
     /// Changes exposure at adjusted point of interest.
     ///
     /// - Parameter adjustedPoint: The point of interest for exposure.
-    public func exposeAtAdjustedPointOfInterest(adjustedPoint: CGPoint) {
+    public func exposeAtAdjustedPointOfInterest(adjustedPoint: CGPoint, exposureMode: AVCaptureDevice.ExposureMode) {
         guard let device = self._currentDevice,
             !device.isAdjustingExposure
             else {
@@ -1834,8 +1847,7 @@ extension NextLevel {
         do {
             try device.lockForConfiguration()
 
-            if device.isExposurePointOfInterestSupported && device.isExposureModeSupported(.continuousAutoExposure) {
-                let exposureMode = device.exposureMode
+            if device.isExposurePointOfInterestSupported && device.isExposureModeSupported(exposureMode) {
                 device.exposurePointOfInterest = adjustedPoint
                 device.exposureMode = exposureMode
             }
@@ -1880,20 +1892,19 @@ extension NextLevel {
         }
     }
     
-    public func expose(withDuration duration: Double, force: Bool = false, completionHandler: ((CMTime) -> Void)? = nil) {
+    public func expose(withDuration duration: CMTime, force: Bool = false, completionHandler: ((CMTime) -> Void)? = nil) {
         guard let device = self._currentDevice, !device.isAdjustingExposure || force else {
                 return
         }
-        log("当前的快门速度:\(device.exposureDuration) -> \(CMTimeGetSeconds(device.exposureDuration)*1000)ms")
-        let newDuration = CMTimeMakeWithSeconds( duration, preferredTimescale: device.exposureDuration.timescale ).clamped(to: device.activeFormat.minExposureDuration...device.activeFormat.maxExposureDuration)
+        log("当前的快门速度:\(device.exposureDuration.value)/\(device.exposureDuration.timescale)")
+        let newDuration = duration.clamped(to: device.activeFormat.minExposureDuration...device.activeFormat.maxExposureDuration)
 
         do {
             try device.lockForConfiguration()
             if device.isExposureModeSupported(.custom) {
-                log("设置快门速度为:\(CMTimeGetSeconds(newDuration))秒")
+                log("设置快门速度为:\(newDuration.value)/\(newDuration.timescale)")
                 device.setExposureModeCustom(duration: newDuration, iso: AVCaptureDevice.currentISO, completionHandler: completionHandler)
             }
-
             device.unlockForConfiguration()
         } catch {
             log("NextLevel, setExposureModeCustom failed to lock device for configuration")
@@ -2080,7 +2091,7 @@ extension NextLevel {
 
         if self.focusMode != .locked {
             self.deviceDelegate?.nextLevelWillStartFocus(self)
-            self.focusAtAdjustedPointOfInterest(adjustedPoint: CGPoint(x: 0.5, y: 0.5))
+            self.focusAtAdjustedPointOfInterest(adjustedPoint: CGPoint(x: 0.5, y: 0.5), focusMode: self.focusMode)
         }
     }
 
