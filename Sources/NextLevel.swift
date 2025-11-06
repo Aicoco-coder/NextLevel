@@ -1541,21 +1541,22 @@ extension NextLevel {
             self.photoConfiguration.flashMode
         }
         set {
-            guard let device = self._currentDevice, device.hasFlash
-                else {
-                    return
-            }
-
-            if let output = self._photoOutput {
-                if self.photoConfiguration.flashMode != newValue {
-                    // iOS 11 GM fix
-                    // https://forums.developer.apple.com/thread/86810
-                    let modes = output.__supportedFlashModes
-                    if modes.contains(NSNumber(value: newValue.rawValue)) {
-                        self.photoConfiguration.flashMode = newValue
-                    }
-                }
-            }
+            self.photoConfiguration.flashMode = newValue
+//            guard let device = self._currentDevice, device.hasFlash
+//                else {
+//                    return
+//            }
+//
+//            if let output = self._photoOutput {
+//                if self.photoConfiguration.flashMode != newValue {
+//                    // iOS 11 GM fix
+//                    // https://forums.developer.apple.com/thread/86810
+//                    let modes = output.__supportedFlashModes
+//                    if modes.contains(NSNumber(value: newValue.rawValue)) {
+//                        self.photoConfiguration.flashMode = newValue
+//                    }
+//                }
+//            }
         }
     }
 
