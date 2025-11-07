@@ -1897,13 +1897,13 @@ extension NextLevel {
         guard let device = self._currentDevice, !device.isAdjustingExposure || force else {
                 return
         }
-        log("当前的快门速度:\(device.exposureDuration.value)/\(device.exposureDuration.timescale)")
+        log("device:\(device) 当前的快门速度:\(device.exposureDuration.value)/\(device.exposureDuration.timescale)")
         let newDuration = duration.clamped(to: device.activeFormat.minExposureDuration...device.activeFormat.maxExposureDuration)
 
         do {
             try device.lockForConfiguration()
             if device.isExposureModeSupported(.custom) {
-                log("设置快门速度为:\(newDuration.value)/\(newDuration.timescale)")
+                log("device:\(device) 设置快门速度为:\(newDuration.value)/\(newDuration.timescale)")
                 device.setExposureModeCustom(duration: newDuration, iso: AVCaptureDevice.currentISO, completionHandler: completionHandler)
             }
             device.unlockForConfiguration()
@@ -1928,7 +1928,7 @@ extension NextLevel {
             try device.lockForConfiguration()
 
 			if device.isExposureModeSupported(.custom) {
-                log("设置iso为:\(newISO)")
+                log("device:\(device) 设置iso为:\(newISO)")
 				device.setExposureModeCustom(duration: AVCaptureDevice.currentExposureDuration, iso: newISO, completionHandler: completionHandler)
 			}
 
@@ -1954,7 +1954,7 @@ extension NextLevel {
 
         do {
             try device.lockForConfiguration()
-            log("设置曝光补偿为:\(newTargetBias)")
+            log("device:\(device) 设置曝光补偿为:\(newTargetBias)")
             device.setExposureTargetBias(newTargetBias, completionHandler: completionHandler)
 
             device.unlockForConfiguration()
