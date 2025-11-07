@@ -1937,6 +1937,30 @@ extension NextLevel {
             log("NextLevel, setExposureModeCustom failed to lock device for configuration")
         }
     }
+    
+    public func expose(withDuration duration: CMTime, iso: Float, force: Bool = false, completionHandler: ((CMTime) -> Void)? = nil) {
+        guard let device = self._currentDevice,
+            !device.isAdjustingExposure || force
+            else {
+                return
+        }
+        log("device:\(device) 当前的快门速度:\(device.exposureDuration.value)/\(device.exposureDuration.timescale), 当前ISO:\(device.iso)")
+        let newDuration = duration.clamped(to: device.activeFormat.minExposureDuration...device.activeFormat.maxExposureDuration)
+        let newISO = iso.clamped(to: device.activeFormat.minISO...device.activeFormat.maxISO)
+
+        do {
+            try device.lockForConfiguration()
+
+            if device.isExposureModeSupported(.custom) {
+                log("device:\(device) 设置快门速度为:\(newDuration.value)/\(newDuration.timescale) iso为:\(newISO)")
+                device.setExposureModeCustom(duration: newDuration, iso: newISO, completionHandler: completionHandler)
+            }
+
+            device.unlockForConfiguration()
+        } catch {
+            log("NextLevel, setExposureModeCustom failed to lock device for configuration")
+        }
+    }
 
     /// Adjusts exposure to the specified target bias.
     ///
