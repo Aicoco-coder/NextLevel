@@ -112,7 +112,7 @@ public protocol NextLevelDeviceDelegate: AnyObject {
     func nextLevelDidChangeWhiteBalance(_ nextLevel: NextLevel)
     
     func nextLevel(_ nextLevel: NextLevel, didChangeExposureTargetBias exposureTargetBias: Float)
-    func nextLevel(_ nextLevel: NextLevel, didChangeWhiteBalanceGains whiteBalanceGains: AVCaptureDevice.WhiteBalanceGains)
+    func nextLevelDidChangeWhiteBalanceGains(_ nextLevel: NextLevel)
     func nextLevel(_ nextLevel: NextLevel, didChangeWhiteBalanceMode whiteBalanceMode: AVCaptureDevice.WhiteBalanceMode)
 }
 

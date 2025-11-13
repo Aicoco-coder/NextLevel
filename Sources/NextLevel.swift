@@ -3421,11 +3421,11 @@ extension NextLevel {
         })
 
         self._observers.append(currentDevice.observe(\.deviceWhiteBalanceGains, options: [.new]) { [weak self] object, _ in
-            guard let self = self else {
+            guard let self = self, self.currentDevice === object else {
                 return
             }
             DispatchQueue.main.async {
-                self.deviceDelegate?.nextLevel(self, didChangeWhiteBalanceGains: object.deviceWhiteBalanceGains)
+                self.deviceDelegate?.nextLevelDidChangeWhiteBalanceGains(self)
             }
         })
         
