@@ -3384,14 +3384,13 @@ extension NextLevel {
             }
         })
 
-        self._observers.append(currentDevice.observe(\.exposureDuration, options: [.new]) { [weak self] _, change in
-			guard let strongSelf = self,
-				  let exposureDuration = change.newValue else {
+        self._observers.append(currentDevice.observe(\.exposureDuration, options: [.new]) { [weak self] object, change in
+			guard let strongSelf = self else {
 				return
 			}
 
 			DispatchQueue.main.async {
-				strongSelf.deviceDelegate?.nextLevel(strongSelf, didChangeExposureDuration: exposureDuration)
+                strongSelf.deviceDelegate?.nextLevel(strongSelf, didChangeExposureDuration: object.exposureDuration)
 			}
         })
 
@@ -3403,12 +3402,12 @@ extension NextLevel {
             // TODO: add delegate callback
         })
 
-        self._observers.append(currentDevice.observe(\.exposureTargetBias, options: [.new]) { [weak self] _, change in
-            guard let self = self, let newValue = change.newValue else {
+        self._observers.append(currentDevice.observe(\.exposureTargetBias, options: [.new]) { [weak self] object, change in
+            guard let self = self else {
                 return
             }
             DispatchQueue.main.async {
-                self.deviceDelegate?.nextLevel(self, didChangeExposureTargetBias: newValue)
+                self.deviceDelegate?.nextLevel(self, didChangeExposureTargetBias: object.exposureTargetBias)
             }
         })
 
