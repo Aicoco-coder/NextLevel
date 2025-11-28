@@ -220,6 +220,8 @@ public class NextLevelVideoConfiguration: NextLevelConfiguration {
 
 	// Video dimensions evenly dividable by this number of pixeld
 	public var sizeDivisibleBy: Int? = 16
+    
+    public var metadata: [AVMutableMetadataItem] = []
 
     // MARK: - object lifecycle
 
@@ -356,6 +358,8 @@ public class NextLevelAudioConfiguration: NextLevelConfiguration {
     /// Audio data format identifier, AV dictionary key AVFormatIDKey
     /// https://developer.apple.com/reference/coreaudio/1613060-core_audio_data_types
     public var format: AudioFormatID = kAudioFormatMPEG4AAC
+    
+    public var metadata: [AVMutableMetadataItem] = []
 
     // MARK: - object lifecycle
 

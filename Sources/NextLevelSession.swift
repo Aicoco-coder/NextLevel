@@ -35,10 +35,10 @@ public class NextLevelSession {
     public var outputDirectory: String
 
     /// Output file type for a session, see AVMediaFormat.h for supported types.
-    public var fileType: AVFileType = .mp4
+    public var fileType: AVFileType = .mov
 
     /// Output file extension for a session, see AVMediaFormat.h for supported extensions.
-    public var fileExtension: String = "mp4"
+    public var fileExtension: String = "mov"
 
     /// Unique identifier for a session.
     public var identifier: UUID {
@@ -268,6 +268,9 @@ extension NextLevelSession {
         }
 
         if let videoInput = self._videoInput {
+            if configuration.metadata.count > 0 {
+                videoInput.metadata = configuration.metadata
+            }
             videoInput.expectsMediaDataInRealTime = true
             videoInput.transform = configuration.transform
             self._videoConfiguration = configuration
@@ -302,6 +305,9 @@ extension NextLevelSession {
     public func setupAudio(withSettings settings: [String: Any]?, configuration: NextLevelAudioConfiguration, formatDescription: CMFormatDescription) -> Bool {
         self._audioInput = AVAssetWriterInput(mediaType: AVMediaType.audio, outputSettings: settings, sourceFormatHint: formatDescription)
         if let audioInput = self._audioInput {
+            if configuration.metadata.count > 0 {
+                audioInput.metadata = configuration.metadata
+            }
             audioInput.expectsMediaDataInRealTime = true
             self._audioConfiguration = configuration
         }
@@ -317,7 +323,7 @@ extension NextLevelSession {
             self._writer = try AVAssetWriter(url: url, fileType: self.fileType)
             if let writer = self._writer {
                 writer.shouldOptimizeForNetworkUse = true
-                writer.metadata = NextLevel.assetWriterMetadata
+                writer.metadata = NextLevel.getAssetWriterMetadataBlock?() ?? NextLevel.assetWriterMetadata
 
                 if let videoInput = self._videoInput {
                     if writer.canAdd(videoInput) {
@@ -690,7 +696,7 @@ extension NextLevelSession {
     /// Removes and destroys all clips for a session.
     ///
     /// - Parameter removeFiles: When true, associated files are also removed.
-    public func removeAllClips(removeFiles: Bool = true) {
+    public func removeAllClips(removeFiles: Bool = false) {
         self.executeClosureAsyncOnSessionQueueIfNecessary {
             while !self._clips.isEmpty {
                 if let clipToRemove = self._clips.first {

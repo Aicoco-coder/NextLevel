@@ -109,5 +109,7 @@ extension NextLevel {
 
         return [modelItem, softwareItem, artistItem, creationDateItem]
     }
+    
+    public static var getAssetWriterMetadataBlock: (()->[AVMutableMetadataItem])?
 
 }

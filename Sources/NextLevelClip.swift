@@ -243,7 +243,7 @@ public class NextLevelClip {
                 self.url = nil
             }
         } catch {
-            print("NextLevel, error deleting a clip's file \(String(describing: self.url?.absoluteString))")
+            print("NextLevel, error deleting a clip's file \(String(describing: self.url?.absoluteString)), error:\(error)")
         }
     }
 
