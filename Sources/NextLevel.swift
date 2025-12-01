@@ -2042,9 +2042,10 @@ extension NextLevel {
     public var whiteBalanceTemperature: Float {
         get {
             if let device = self._currentDevice {
-                return device.temperatureAndTintValues(for: device.deviceWhiteBalanceGains).temperature
+                let whiteBalanceGains = device.deviceWhiteBalanceGains.normalize(device)
+                return device.temperatureAndTintValues(for: whiteBalanceGains).temperature
             }
-            return whiteBalanceTemperatureRange.upperBound
+            return 5300
         }
         set {
             self.executeClosureAsyncOnSessionQueueIfNecessary {
@@ -2053,7 +2054,7 @@ extension NextLevel {
                 }
 
                 let newTemperature = newValue.clamped(to: self.whiteBalanceTemperatureRange)
-                let temperatureAndTint = AVCaptureDevice.WhiteBalanceTemperatureAndTintValues(temperature: newTemperature, tint: device.temperatureAndTintValues(for: device.deviceWhiteBalanceGains).tint)
+                let temperatureAndTint = AVCaptureDevice.WhiteBalanceTemperatureAndTintValues(temperature: newTemperature, tint: self.whiteBalanceTint)
                 
                 let newWhiteBalanceGains = device.deviceWhiteBalanceGains(for: temperatureAndTint)
                 self.adjustWhiteBalanceGains(newWhiteBalanceGains)
@@ -2064,9 +2065,10 @@ extension NextLevel {
     public var whiteBalanceTint: Float {
         get {
             if let device = self._currentDevice {
-                return device.temperatureAndTintValues(for: device.deviceWhiteBalanceGains).tint
+                let whiteBalanceGains = device.deviceWhiteBalanceGains.normalize(device)
+                return device.temperatureAndTintValues(for: whiteBalanceGains).tint
             }
-            return whiteBalanceTintRange.upperBound
+            return 0
         }
         set {
             self.executeClosureAsyncOnSessionQueueIfNecessary {
@@ -2075,7 +2077,7 @@ extension NextLevel {
                 }
 
                 let newTint = newValue.clamped(to: self.whiteBalanceTintRange)
-                let temperatureAndTint = AVCaptureDevice.WhiteBalanceTemperatureAndTintValues(temperature: device.temperatureAndTintValues(for: device.deviceWhiteBalanceGains).temperature, tint: newTint)
+                let temperatureAndTint = AVCaptureDevice.WhiteBalanceTemperatureAndTintValues(temperature: self.whiteBalanceTemperature, tint: newTint)
                 let newWhiteBalanceGains = device.deviceWhiteBalanceGains(for: temperatureAndTint)
                 self.adjustWhiteBalanceGains(newWhiteBalanceGains)
             }
@@ -2702,69 +2704,74 @@ extension NextLevel {
         guard let photoOutput = self._photoOutput, let _ = photoOutput.connection(with: AVMediaType.video) else {
             return
         }
-
-        if let formatDictionary = self.photoConfiguration.avcaptureDictionary() {
-            var photoSettings: AVCapturePhotoSettings
-            if self.photoConfiguration.isRawCaptureEnabled {
-                var rawFormat = photoOutput.availableRawPhotoPixelFormatTypes.first
-                if #available(iOS 14.3, *) {
-                    let query = photoOutput.isAppleProRAWEnabled ?
-                    { AVCapturePhotoOutput.isAppleProRAWPixelFormat($0) } :
-                    { AVCapturePhotoOutput.isBayerRAWPixelFormat($0) }
-                    if let format = photoOutput.availableRawPhotoPixelFormatTypes.first(where: query) {
-                        rawFormat = format
-                    }
-                }
-                guard let rawFormat = rawFormat else { return }
-                // Capture a RAW format photo, along with a processed format photo.
-                //let processedFormat = [AVVideoCodecKey: AVVideoCodecType.hevc]
-                photoSettings = AVCapturePhotoSettings(rawPixelFormatType: rawFormat)
-                if self.photoConfiguration.generateThumbnail {
-                    if let thumbnailPhotoCodecType = photoSettings.availableRawEmbeddedThumbnailPhotoCodecTypes.first {
-                        photoSettings.rawEmbeddedThumbnailPhotoFormat = [
-                            AVVideoCodecKey: thumbnailPhotoCodecType,
-                        ]
-                    }
-                }
-            } else {
-                photoSettings = AVCapturePhotoSettings(format: formatDictionary)
-                if self.photoConfiguration.generateThumbnail {
-                    if let thumbnailPhotoCodecType = photoSettings.availableEmbeddedThumbnailPhotoCodecTypes.first {
-                        photoSettings.embeddedThumbnailPhotoFormat = [
-                            AVVideoCodecKey: thumbnailPhotoCodecType,
-                        ]
-                    }
-                }
-                photoSettings.isHighResolutionPhotoEnabled = self.photoConfiguration.isHighResolutionEnabled
-                photoOutput.isHighResolutionCaptureEnabled = self.photoConfiguration.isHighResolutionEnabled
-
-                photoSettings.photoQualityPrioritization = photoConfiguration.photoQualityPrioritization
-                photoOutput.maxPhotoQualityPrioritization = photoConfiguration.photoQualityPrioritization
-
-                #if USE_TRUE_DEPTH
-                if photoOutput.isDepthDataDeliverySupported {
-                    photoOutput.isDepthDataDeliveryEnabled = self.photoConfiguration.isDepthDataEnabled
-                    photoSettings.embedsDepthDataInPhoto = self.photoConfiguration.isDepthDataEnabled
-                }
-                #endif
-
-                if photoOutput.isPortraitEffectsMatteDeliverySupported {
-                    photoOutput.isPortraitEffectsMatteDeliveryEnabled = self.photoConfiguration.isPortraitEffectsMatteEnabled
+        var photoSettings: AVCapturePhotoSettings
+        var rawFormat: OSType?
+        if self.photoConfiguration.isRawCaptureEnabled {
+            rawFormat = photoOutput.availableRawPhotoPixelFormatTypes.first
+            if #available(iOS 14.3, *) {
+                let query = photoOutput.isAppleProRAWEnabled ?
+                { AVCapturePhotoOutput.isAppleProRAWPixelFormat($0) } :
+                { AVCapturePhotoOutput.isBayerRAWPixelFormat($0) }
+                if let format = photoOutput.availableRawPhotoPixelFormatTypes.first(where: query) {
+                    rawFormat = format
                 }
             }
-
-            if self.isFlashAvailable {
-                photoSettings.flashMode = self.photoConfiguration.flashMode
-            }
-            if #available(iOS 18.0, *) {
-                if photoOutput.isShutterSoundSuppressionSupported {
-                    photoSettings.isShutterSoundSuppressionEnabled = self.photoConfiguration.isShutterSoundSuppressionEnabled
-                }
-            } else {
-                // Fallback on earlier versions
-            }
-            photoOutput.capturePhoto(with: photoSettings, delegate: self)
         }
+        if let rawFormat = rawFormat {
+            // Capture a RAW format photo, along with a processed format photo.
+            //let processedFormat = [AVVideoCodecKey: AVVideoCodecType.hevc]
+            photoSettings = AVCapturePhotoSettings(rawPixelFormatType: rawFormat)
+            if self.photoConfiguration.generateThumbnail {
+                if let thumbnailPhotoCodecType = photoSettings.availableRawEmbeddedThumbnailPhotoCodecTypes.first {
+                    photoSettings.rawEmbeddedThumbnailPhotoFormat = [
+                        AVVideoCodecKey: thumbnailPhotoCodecType,
+                    ]
+                }
+            }
+        } else {
+            var formatDictionary: [String : Any] = [
+                AVVideoCodecKey: AVVideoCodecType.jpeg
+            ]
+            if photoOutput.availablePhotoCodecTypes.contains(AVVideoCodecType.hevc) {
+                formatDictionary[AVVideoCodecKey] = AVVideoCodecType.hevc
+            }
+            photoSettings = AVCapturePhotoSettings(format: formatDictionary)
+            if self.photoConfiguration.generateThumbnail {
+                if let thumbnailPhotoCodecType = photoSettings.availableEmbeddedThumbnailPhotoCodecTypes.first {
+                    photoSettings.embeddedThumbnailPhotoFormat = [
+                        AVVideoCodecKey: thumbnailPhotoCodecType,
+                    ]
+                }
+            }
+            photoSettings.isHighResolutionPhotoEnabled = self.photoConfiguration.isHighResolutionEnabled
+            photoOutput.isHighResolutionCaptureEnabled = self.photoConfiguration.isHighResolutionEnabled
+            
+            photoSettings.photoQualityPrioritization = photoConfiguration.photoQualityPrioritization
+            photoOutput.maxPhotoQualityPrioritization = photoConfiguration.photoQualityPrioritization
+            
+#if USE_TRUE_DEPTH
+            if photoOutput.isDepthDataDeliverySupported {
+                photoOutput.isDepthDataDeliveryEnabled = self.photoConfiguration.isDepthDataEnabled
+                photoSettings.embedsDepthDataInPhoto = self.photoConfiguration.isDepthDataEnabled
+            }
+#endif
+            
+            if photoOutput.isPortraitEffectsMatteDeliverySupported {
+                photoOutput.isPortraitEffectsMatteDeliveryEnabled = self.photoConfiguration.isPortraitEffectsMatteEnabled
+            }
+        }
+
+        if self.isFlashAvailable {
+            photoSettings.flashMode = self.photoConfiguration.flashMode
+        }
+        if #available(iOS 18.0, *) {
+            if photoOutput.isShutterSoundSuppressionSupported {
+                photoSettings.isShutterSoundSuppressionEnabled = self.photoConfiguration.isShutterSoundSuppressionEnabled
+            }
+        } else {
+            // Fallback on earlier versions
+        }
+        photoOutput.capturePhoto(with: photoSettings, delegate: self)
     }
 
 }
