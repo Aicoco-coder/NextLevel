@@ -397,6 +397,8 @@ public class NextLevel: NSObject {
 
         }
     }
+    private var isSessionPause: Bool = true
+    private var recoverSessionTryCount: Int = 0
 
     /// The current recording session, a powerful means for modifying and editing previously recorded clips.
     /// The session provides features such as 'undo'.
@@ -625,10 +627,11 @@ extension NextLevel {
         guard self.authorizationStatusForCurrentCaptureMode() == .authorized else {
             throw NextLevelError.authorization
         }
-
+        recoverSessionTryCount = 0
         switch self.captureMode {
         #if USE_ARKIT
         case .arKit, .arKitWithoutAudio:
+            self.isSessionPause = false
             setupARSession()
         #endif
         default:
@@ -638,13 +641,15 @@ extension NextLevel {
                     return
                 }
                 self.log("---> guard self._captureSession != nil")
+                self.isSessionPause = false
                 self.setupAVSession()
             }
         }
     }
     
-    public func pause(_ pause: Bool) {
+    public func pauseSession(_ pause: Bool) {
         log("pause:\(pause)")
+        isSessionPause = pause
         self.executeClosureAsyncOnSessionQueueIfNecessary {
             guard let session = self._captureSession else  {
                 return
@@ -675,10 +680,10 @@ extension NextLevel {
                 self.removeInputs(session: session)
                 self.removeOutputs(session: session)
                 self.commitConfiguration()
-
                 self._recordingSession = nil
                 self._captureSession = nil
                 self._currentDevice = nil
+                self.isSessionPause = true
                 self.log("--->self._captureSession = nil")
             }
         }
@@ -3249,9 +3254,18 @@ extension NextLevel {
                 switch error.code {
                 case .deviceIsNotAvailableInBackground:
                     self.log("NextLevel, error, media services are not available in the background")
-                    break
                 case .mediaServicesWereReset:
-                    fallthrough
+                    self.log("NextLevel, error, mediaServicesWereReset")
+                    if self.isSessionPause == false, UIApplication.shared.applicationState == .active {
+                        if self.recoverSessionTryCount < 1 {
+                            self.recoverSessionTryCount += 1
+                            NextLevel.shared.pauseSession(true)
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+                                self.log("NextLevel error: mediaServicesWereReset, try recover session, try count:\(self.recoverSessionTryCount)")
+                                NextLevel.shared.pauseSession(false)
+                            }
+                        }
+                    }
                 default:
                     // TODO reset capture
                     break
