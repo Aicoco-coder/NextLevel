@@ -1167,6 +1167,13 @@ extension NextLevel {
         return false
 
     }
+    
+    public func resetPhotoOutput() {
+        if let connection = self._photoOutput?.connection(with: .video) {
+            connection.isEnabled = false
+            connection.isEnabled = true
+        }
+    }
 
     private func addMovieOutput() -> Bool {
 
