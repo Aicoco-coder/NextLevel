@@ -1169,9 +1169,13 @@ extension NextLevel {
     }
     
     public func resetPhotoOutput() {
-        if let connection = self._photoOutput?.connection(with: .video) {
-            connection.isEnabled = false
-            connection.isEnabled = true
+        if let session = self.captureSession, let photoOutput = self._photoOutput {
+            if session.outputs.contains(photoOutput) {            
+                session.removeOutput(photoOutput)
+            }
+            self._photoOutput = nil
+            let _ = addPhotoOutput()
+            updateVideoOrientation()
         }
     }
 
