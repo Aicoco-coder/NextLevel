@@ -1148,7 +1148,10 @@ extension NextLevel {
     private func addPhotoOutput() -> Bool {
 
         if self._photoOutput == nil {
-            self._photoOutput = AVCapturePhotoOutput()
+            let photoOutput = AVCapturePhotoOutput()
+            photoOutput.isHighResolutionCaptureEnabled = self.photoConfiguration.isHighResolutionEnabled
+            photoOutput.maxPhotoQualityPrioritization = self.photoConfiguration.photoQualityPrioritization
+            self._photoOutput = photoOutput
         }
 
         if let session = self._captureSession, let photoOutput = self._photoOutput {
@@ -2759,21 +2762,21 @@ extension NextLevel {
                     ]
                 }
             }
-            photoSettings.isHighResolutionPhotoEnabled = flashConnectedMode ? false : self.photoConfiguration.isHighResolutionEnabled
-            photoOutput.isHighResolutionCaptureEnabled = flashConnectedMode ? false : self.photoConfiguration.isHighResolutionEnabled
+            photoSettings.isHighResolutionPhotoEnabled = self.photoConfiguration.isHighResolutionEnabled
+            //photoOutput.isHighResolutionCaptureEnabled = self.photoConfiguration.isHighResolutionEnabled
             
-            photoSettings.photoQualityPrioritization = flashConnectedMode ? .speed : photoConfiguration.photoQualityPrioritization
-            photoOutput.maxPhotoQualityPrioritization = flashConnectedMode ? .speed : photoConfiguration.photoQualityPrioritization
+            photoSettings.photoQualityPrioritization = photoConfiguration.photoQualityPrioritization
+            //photoOutput.maxPhotoQualityPrioritization = photoConfiguration.photoQualityPrioritization
             
 #if USE_TRUE_DEPTH
             if photoOutput.isDepthDataDeliverySupported {
-                photoOutput.isDepthDataDeliveryEnabled = flashConnectedMode ? false : self.photoConfiguration.isDepthDataEnabled
-                photoSettings.embedsDepthDataInPhoto = flashConnectedMode ? false : self.photoConfiguration.isDepthDataEnabled
+                photoOutput.isDepthDataDeliveryEnabled = self.photoConfiguration.isDepthDataEnabled
+                photoSettings.embedsDepthDataInPhoto = self.photoConfiguration.isDepthDataEnabled
             }
 #endif
             
             if photoOutput.isPortraitEffectsMatteDeliverySupported {
-                photoOutput.isPortraitEffectsMatteDeliveryEnabled = flashConnectedMode ? false : self.photoConfiguration.isPortraitEffectsMatteEnabled
+                photoOutput.isPortraitEffectsMatteDeliveryEnabled = self.photoConfiguration.isPortraitEffectsMatteEnabled
             }
         }
         /*
