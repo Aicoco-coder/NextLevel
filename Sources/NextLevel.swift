@@ -2716,7 +2716,7 @@ extension NextLevel {
     }
 
     /// Triggers a photo capture.
-    public func capturePhoto() {
+    public func capturePhoto(flashConnectedMode: Bool = false) {
         guard let photoOutput = self._photoOutput, let _ = photoOutput.connection(with: AVMediaType.video) else {
             return
         }
@@ -2759,26 +2759,36 @@ extension NextLevel {
                     ]
                 }
             }
-            photoSettings.isHighResolutionPhotoEnabled = self.photoConfiguration.isHighResolutionEnabled
-            photoOutput.isHighResolutionCaptureEnabled = self.photoConfiguration.isHighResolutionEnabled
+            photoSettings.isHighResolutionPhotoEnabled = flashConnectedMode ? false : self.photoConfiguration.isHighResolutionEnabled
+            photoOutput.isHighResolutionCaptureEnabled = flashConnectedMode ? false : self.photoConfiguration.isHighResolutionEnabled
             
-            photoSettings.photoQualityPrioritization = photoConfiguration.photoQualityPrioritization
-            photoOutput.maxPhotoQualityPrioritization = photoConfiguration.photoQualityPrioritization
+            photoSettings.photoQualityPrioritization = flashConnectedMode ? .speed : photoConfiguration.photoQualityPrioritization
+            photoOutput.maxPhotoQualityPrioritization = flashConnectedMode ? .speed : photoConfiguration.photoQualityPrioritization
             
 #if USE_TRUE_DEPTH
             if photoOutput.isDepthDataDeliverySupported {
-                photoOutput.isDepthDataDeliveryEnabled = self.photoConfiguration.isDepthDataEnabled
-                photoSettings.embedsDepthDataInPhoto = self.photoConfiguration.isDepthDataEnabled
+                photoOutput.isDepthDataDeliveryEnabled = flashConnectedMode ? false : self.photoConfiguration.isDepthDataEnabled
+                photoSettings.embedsDepthDataInPhoto = flashConnectedMode ? false : self.photoConfiguration.isDepthDataEnabled
             }
 #endif
             
             if photoOutput.isPortraitEffectsMatteDeliverySupported {
-                photoOutput.isPortraitEffectsMatteDeliveryEnabled = self.photoConfiguration.isPortraitEffectsMatteEnabled
+                photoOutput.isPortraitEffectsMatteDeliveryEnabled = flashConnectedMode ? false : self.photoConfiguration.isPortraitEffectsMatteEnabled
             }
         }
+        /*
+        if flashConnectedMode {
+            if #available(iOS 17.0, *) {
+                if photoOutput.isZeroShutterLagSupported {
+                    photoOutput.isZeroShutterLagEnabled = false
+                }
+            } else {
+                // Fallback on earlier versions
+            }
+        }*/
 
         if self.isFlashAvailable {
-            photoSettings.flashMode = self.photoConfiguration.flashMode
+            photoSettings.flashMode = flashConnectedMode ? .off : self.photoConfiguration.flashMode
         }
         if #available(iOS 18.0, *) {
             if photoOutput.isShutterSoundSuppressionSupported {
