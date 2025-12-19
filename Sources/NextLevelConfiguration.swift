@@ -440,6 +440,7 @@ public class NextLevelPhotoConfiguration: NextLevelConfiguration {
     public var isPortraitEffectsMatteEnabled: Bool = false
 
     public var isRawCaptureEnabled: Bool = false
+    public var isZeroShutterLagEnabled: Bool = true
 
     // MARK: - ivars
 

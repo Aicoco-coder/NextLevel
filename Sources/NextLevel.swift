@@ -1167,8 +1167,8 @@ extension NextLevel {
                 if #available(iOS 17.0, *) {
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                         if photoOutput.isZeroShutterLagSupported {
-                            photoOutput.isZeroShutterLagEnabled = false
-                            self.log("photoOutput.isZeroShutterLagEnabled = \(false)")
+                            photoOutput.isZeroShutterLagEnabled = self.photoConfiguration.isZeroShutterLagEnabled
+                            self.log("photoOutput.isZeroShutterLagEnabled = \(self.photoConfiguration.isZeroShutterLagEnabled)")
                         }
                     }
                 }
@@ -1182,15 +1182,16 @@ extension NextLevel {
     }
     
     public func setZeroShutterLag(enabled: Bool) {
-//        guard let photoOutput = self._photoOutput else {
-//            return
-//        }
-//        if #available(iOS 17.0, *) {
-//            if photoOutput.isZeroShutterLagSupported {
-//                photoOutput.isZeroShutterLagEnabled = enabled
-//                log("photoOutput.isZeroShutterLagEnabled = \(enabled)")
-//            }
-//        }
+        self.photoConfiguration.isZeroShutterLagEnabled = enabled
+        guard let photoOutput = self._photoOutput else {
+            return
+        }
+        if #available(iOS 17.0, *) {
+            if photoOutput.isZeroShutterLagSupported {
+                photoOutput.isZeroShutterLagEnabled = enabled
+                log("photoOutput.isZeroShutterLagEnabled = \(enabled)")
+            }
+        }
     }
     
     public func resetPhotoOutput() {
@@ -1198,8 +1199,11 @@ extension NextLevel {
             if session.outputs.contains(photoOutput) {            
                 session.removeOutput(photoOutput)
             }
-            self._photoOutput = nil
-            let _ = addPhotoOutput()
+            if session.canAddOutput(photoOutput) {
+                session.addOutput(photoOutput)
+            }
+            //self._photoOutput = nil
+            //let _ = addPhotoOutput()
             updateVideoOrientation()
         }
     }
