@@ -1148,10 +1148,7 @@ extension NextLevel {
     private func addPhotoOutput() -> Bool {
 
         if self._photoOutput == nil {
-            let photoOutput = AVCapturePhotoOutput()
-            photoOutput.isHighResolutionCaptureEnabled = true
-            photoOutput.maxPhotoQualityPrioritization = .quality
-            self._photoOutput = photoOutput
+            self._photoOutput = AVCapturePhotoOutput()
         }
 
         if let session = self._captureSession, let photoOutput = self._photoOutput {
@@ -1160,6 +1157,19 @@ extension NextLevel {
                 if self.photoConfiguration.isRawCaptureEnabled {
                     if #available(iOS 14.3, *) {
                         photoOutput.isAppleProRAWEnabled = photoOutput.isAppleProRAWSupported
+                    }
+                }
+                photoOutput.isHighResolutionCaptureEnabled = true
+                photoOutput.maxPhotoQualityPrioritization = .quality
+                if photoOutput.isPortraitEffectsMatteDeliverySupported {
+                    photoOutput.isPortraitEffectsMatteDeliveryEnabled = self.photoConfiguration.isPortraitEffectsMatteEnabled
+                }
+                if #available(iOS 17.0, *) {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                        if photoOutput.isZeroShutterLagSupported {
+                            photoOutput.isZeroShutterLagEnabled = false
+                            self.log("photoOutput.isZeroShutterLagEnabled = \(false)")
+                        }
                     }
                 }
                 self.addCaptureOutputObservers()
@@ -1172,15 +1182,15 @@ extension NextLevel {
     }
     
     public func setZeroShutterLag(enabled: Bool) {
-        guard let photoOutput = self._photoOutput else {
-            return
-        }
-        if #available(iOS 17.0, *) {
-            if photoOutput.isZeroShutterLagSupported {
-                photoOutput.isZeroShutterLagEnabled = enabled
-                log("photoOutput.isZeroShutterLagEnabled = \(enabled)")
-            }
-        }
+//        guard let photoOutput = self._photoOutput else {
+//            return
+//        }
+//        if #available(iOS 17.0, *) {
+//            if photoOutput.isZeroShutterLagSupported {
+//                photoOutput.isZeroShutterLagEnabled = enabled
+//                log("photoOutput.isZeroShutterLagEnabled = \(enabled)")
+//            }
+//        }
     }
     
     public func resetPhotoOutput() {
@@ -2776,7 +2786,7 @@ extension NextLevel {
             }
             photoSettings.isHighResolutionPhotoEnabled = flashConnectedMode ? true : self.photoConfiguration.isHighResolutionEnabled
             
-            photoSettings.photoQualityPrioritization = flashConnectedMode ? .quality : photoConfiguration.photoQualityPrioritization
+            photoSettings.photoQualityPrioritization = flashConnectedMode ? .quality : self.photoConfiguration.photoQualityPrioritization
             
 #if USE_TRUE_DEPTH
             if photoOutput.isDepthDataDeliverySupported {
@@ -2785,9 +2795,6 @@ extension NextLevel {
             }
 #endif
             
-            if photoOutput.isPortraitEffectsMatteDeliverySupported {
-                photoOutput.isPortraitEffectsMatteDeliveryEnabled = self.photoConfiguration.isPortraitEffectsMatteEnabled
-            }
         }
         
         if self.isFlashAvailable {
