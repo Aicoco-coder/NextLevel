@@ -1199,11 +1199,8 @@ extension NextLevel {
             if session.outputs.contains(photoOutput) {            
                 session.removeOutput(photoOutput)
             }
-            if session.canAddOutput(photoOutput) {
-                session.addOutput(photoOutput)
-            }
-            //self._photoOutput = nil
-            //let _ = addPhotoOutput()
+            self._photoOutput = nil
+            let _ = addPhotoOutput()
             updateVideoOrientation()
         }
     }
