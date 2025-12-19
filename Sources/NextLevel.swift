@@ -1149,8 +1149,8 @@ extension NextLevel {
 
         if self._photoOutput == nil {
             let photoOutput = AVCapturePhotoOutput()
-            photoOutput.isHighResolutionCaptureEnabled = self.photoConfiguration.isHighResolutionEnabled
-            photoOutput.maxPhotoQualityPrioritization = self.photoConfiguration.photoQualityPrioritization
+            photoOutput.isHighResolutionCaptureEnabled = true
+            photoOutput.maxPhotoQualityPrioritization = .quality
             self._photoOutput = photoOutput
         }
 
@@ -1169,6 +1169,18 @@ extension NextLevel {
         log("NextLevel, couldn't add photo output to session")
         return false
 
+    }
+    
+    public func setZeroShutterLag(enabled: Bool) {
+        guard let photoOutput = self._photoOutput else {
+            return
+        }
+        if #available(iOS 17.0, *) {
+            if photoOutput.isZeroShutterLagSupported {
+                photoOutput.isZeroShutterLagEnabled = enabled
+                log("photoOutput.isZeroShutterLagEnabled = \(enabled)")
+            }
+        }
     }
     
     public func resetPhotoOutput() {
@@ -2762,11 +2774,9 @@ extension NextLevel {
                     ]
                 }
             }
-            photoSettings.isHighResolutionPhotoEnabled = self.photoConfiguration.isHighResolutionEnabled
-            //photoOutput.isHighResolutionCaptureEnabled = self.photoConfiguration.isHighResolutionEnabled
+            photoSettings.isHighResolutionPhotoEnabled = flashConnectedMode ? true : self.photoConfiguration.isHighResolutionEnabled
             
-            photoSettings.photoQualityPrioritization = photoConfiguration.photoQualityPrioritization
-            //photoOutput.maxPhotoQualityPrioritization = photoConfiguration.photoQualityPrioritization
+            photoSettings.photoQualityPrioritization = flashConnectedMode ? .quality : photoConfiguration.photoQualityPrioritization
             
 #if USE_TRUE_DEPTH
             if photoOutput.isDepthDataDeliverySupported {
@@ -2779,17 +2789,7 @@ extension NextLevel {
                 photoOutput.isPortraitEffectsMatteDeliveryEnabled = self.photoConfiguration.isPortraitEffectsMatteEnabled
             }
         }
-        /*
-        if flashConnectedMode {
-            if #available(iOS 17.0, *) {
-                if photoOutput.isZeroShutterLagSupported {
-                    photoOutput.isZeroShutterLagEnabled = false
-                }
-            } else {
-                // Fallback on earlier versions
-            }
-        }*/
-
+        
         if self.isFlashAvailable {
             photoSettings.flashMode = flashConnectedMode ? .off : self.photoConfiguration.flashMode
         }
