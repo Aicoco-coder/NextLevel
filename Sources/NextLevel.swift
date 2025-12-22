@@ -2764,7 +2764,7 @@ extension NextLevel {
             //let processedFormat = [AVVideoCodecKey: AVVideoCodecType.hevc]
             if flashConnectedMode {
                 let makeSettings = AVCaptureAutoExposureBracketedStillImageSettings.autoExposureSettings
-                let bracketedStillImageSettings = [-1].map { makeSettings(Float($0)) }
+                let bracketedStillImageSettings = [-2].map { makeSettings(Float($0)) }
                 let settings = AVCapturePhotoBracketSettings.init(rawPixelFormatType: rawFormat, processedFormat: nil, bracketedSettings: bracketedStillImageSettings)
                 settings.isLensStabilizationEnabled = photoOutput.isLensStabilizationDuringBracketedCaptureSupported
                 photoSettings = settings
