@@ -2762,7 +2762,15 @@ extension NextLevel {
         if let rawFormat = rawFormat {
             // Capture a RAW format photo, along with a processed format photo.
             //let processedFormat = [AVVideoCodecKey: AVVideoCodecType.hevc]
-            photoSettings = AVCapturePhotoSettings(rawPixelFormatType: rawFormat)
+            if flashConnectedMode {
+                let makeSettings = AVCaptureAutoExposureBracketedStillImageSettings.autoExposureSettings
+                let bracketedStillImageSettings = [0].map { makeSettings(Float($0)) }
+                let settings = AVCapturePhotoBracketSettings.init(rawPixelFormatType: rawFormat, processedFormat: nil, bracketedSettings: bracketedStillImageSettings)
+                settings.isLensStabilizationEnabled = photoOutput.isLensStabilizationDuringBracketedCaptureSupported
+                photoSettings = settings
+            } else {
+                photoSettings = AVCapturePhotoSettings(rawPixelFormatType: rawFormat)
+            }
             if self.photoConfiguration.generateThumbnail {
                 if let thumbnailPhotoCodecType = photoSettings.availableRawEmbeddedThumbnailPhotoCodecTypes.first {
                     photoSettings.rawEmbeddedThumbnailPhotoFormat = [
