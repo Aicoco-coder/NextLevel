@@ -2794,8 +2794,25 @@ extension NextLevel {
                 }
             }
             photoSettings.isHighResolutionPhotoEnabled = flashConnectedMode ? true : self.photoConfiguration.isHighResolutionEnabled
-            
-            photoSettings.photoQualityPrioritization = flashConnectedMode ? .quality : self.photoConfiguration.photoQualityPrioritization
+            let systemVersion = ProcessInfo.processInfo.operatingSystemVersion
+            //log("systemVersion:\(systemVersion)")
+            if flashConnectedMode {
+                if systemVersion.majorVersion == 26 && systemVersion.minorVersion < 2 {
+                    // >= 26.0, < 26.2, iPhone 17 Pro 长焦镜头如果设置photoQualityPrioritization为quality会导致拍摄失败
+                    if #available(iOS 16.0, *) {
+                        if let device = currentDevice,
+                           device.deviceType == .builtInTelephotoCamera, device.activeFormat.secondaryNativeResolutionZoomFactors.count > 0 {
+                            photoSettings.photoQualityPrioritization = .balanced
+                        } else {
+                            photoSettings.photoQualityPrioritization = .quality
+                        }
+                    }
+                } else {
+                    photoSettings.photoQualityPrioritization = .quality
+                }
+            } else {
+                photoSettings.photoQualityPrioritization = self.photoConfiguration.photoQualityPrioritization
+            }
             
 #if USE_TRUE_DEPTH
             if photoOutput.isDepthDataDeliverySupported {
@@ -3123,7 +3140,9 @@ extension NextLevel: AVCapturePhotoCaptureDelegate {
         if let data = imageData {
             photoDict[NextLevelPhotoFileDataKey] = data
         }
-
+        if let error = error {
+            log("error:\(error)")
+        }
         DispatchQueue.main.async {
             self.photoDelegate?.nextLevel(self, didFinishProcessingPhoto: photo, photoDict: photoDict, photoConfiguration: self.photoConfiguration)
         }
