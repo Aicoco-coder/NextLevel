@@ -308,7 +308,8 @@ public class NextLevel: NSObject {
                 self.configureSessionDevices()
                 self.configureMetadataObjects()
                 self.updateVideoOrientation()
-                DispatchQueue.main.async {                
+                self.updateVideoOutputSettings()
+                DispatchQueue.main.async {
                     self.delegate?.nextLevelCaptureModeDidChange(self)
                 }
             }
@@ -321,6 +322,7 @@ public class NextLevel: NSObject {
             self.executeClosureAsyncOnSessionQueueIfNecessary {
                 self.configureSessionDevices()
                 self.updateVideoOrientation()
+                self.updateVideoOutputSettings()
             }
         }
     }
@@ -333,7 +335,8 @@ public class NextLevel: NSObject {
         didSet {
             automaticallyUpdatesDeviceOrientation = false
 			_sessionQueue.sync {
-				updateVideoOrientation()
+                self.updateVideoOrientation()
+                self.updateVideoOutputSettings()
 			}
         }
     }
@@ -718,7 +721,7 @@ extension NextLevel {
                 self.configureSessionDevices()
                 self.configureMetadataObjects()
                 self.updateVideoOrientation()
-
+                self.updateVideoOutputSettings()
                 self.commitConfiguration()
 
                 if session.isRunning == false {
@@ -758,6 +761,7 @@ extension NextLevel {
                 self.configureSession()
                 self.configureSessionDevices()
                 self.updateVideoOrientation()
+                self.updateVideoOutputSettings()
                 self.commitConfiguration()
             }
 
@@ -1117,7 +1121,7 @@ extension NextLevel {
                 session.addOutput(videoOutput)
                 videoOutput.setSampleBufferDelegate(self, queue: self._sessionQueue)
 
-                self.updateVideoOutputSettings()
+                //self.updateVideoOutputSettings()
 
                 return true
             }
@@ -1202,6 +1206,7 @@ extension NextLevel {
             self._photoOutput = nil
             let _ = addPhotoOutput()
             updateVideoOrientation()
+            updateVideoOutputSettings()
         }
     }
 
@@ -1436,6 +1441,7 @@ extension NextLevel {
                 self._requestedDevice = deviceForUse
                 self.configureSessionDevices()
                 self.updateVideoOrientation()
+                self.updateVideoOutputSettings()
             }
         }
     }
@@ -2629,6 +2635,9 @@ extension NextLevel {
         self._recording = true
         DispatchQueue.global().async {
             if let session = self._recordingSession {
+                if let connection = self._videoOutput?.connection(with: .video) {
+                    self.log("防抖模式: \(connection.activeVideoStabilizationMode)")
+                }
                 var count = 0
                 while !(session.isAudioSetup && session.isVideoSetup) && count < 5 { // < 500ms
                     Thread.sleep(forTimeInterval: 0.1) // 100ms
@@ -3387,6 +3396,7 @@ extension NextLevel {
         if self.automaticallyUpdatesDeviceOrientation {
             self._sessionQueue.sync {
                 self.updateVideoOrientation()
+                self.updateVideoOutputSettings()
             }
         }
     }
