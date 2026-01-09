@@ -426,7 +426,7 @@ public class NextLevelPhotoConfiguration: NextLevelConfiguration {
     public var generateThumbnail: Bool = false
 
     /// Enabled high resolution capture
-    public var isHighResolutionEnabled: Bool = false
+    //public var isHighResolutionEnabled: Bool = false
 
 	/// Photo quality prioritization
 	public var photoQualityPrioritization: AVCapturePhotoOutput.QualityPrioritization = .balanced

@@ -26,6 +26,7 @@
 import UIKit
 import Foundation
 import AVFoundation
+import CoreMedia
 
 extension AVCaptureConnection {
 
@@ -282,4 +283,61 @@ extension AVCaptureVideoOrientation {
         return avorientation
     }
 
+}
+
+extension CMVideoDimensions: @retroactive Comparable, @retroactive Equatable {
+    // 计算总像素数
+    public var pixelCount: Int {
+        return Int(width) * Int(height)
+    }
+    
+    // 计算百万像素数
+    public var megapixels: Float {
+        return Float(pixelCount) / 1_000_000.0
+    }
+    
+    // 实现 Equatable
+    public static func == (lhs: CMVideoDimensions, rhs: CMVideoDimensions) -> Bool {
+        return lhs.width == rhs.width && lhs.height == rhs.height
+    }
+    
+    // 实现 Comparable
+    public static func < (lhs: CMVideoDimensions, rhs: CMVideoDimensions) -> Bool {
+        // 按总像素数比较
+        return lhs.pixelCount < rhs.pixelCount
+    }
+    
+    public static func <= (lhs: CMVideoDimensions, rhs: CMVideoDimensions) -> Bool {
+        return lhs.pixelCount <= rhs.pixelCount
+    }
+    
+    public static func > (lhs: CMVideoDimensions, rhs: CMVideoDimensions) -> Bool {
+        return lhs.pixelCount > rhs.pixelCount
+    }
+    
+    public static func >= (lhs: CMVideoDimensions, rhs: CMVideoDimensions) -> Bool {
+        return lhs.pixelCount >= rhs.pixelCount
+    }
+    
+    // 按宽度比较
+    public func isWider(than other: CMVideoDimensions) -> Bool {
+        return width > other.width
+    }
+    
+    // 按高度比较
+    public func isTaller(than other: CMVideoDimensions) -> Bool {
+        return height > other.height
+    }
+}
+
+extension OSType {
+    var toString: String {
+        let n = Int(self)
+        var s: String = ""
+        s.append(Character(UnicodeScalar((n >> 24) & 255)!))
+        s.append(Character(UnicodeScalar((n >> 16) & 255)!))
+        s.append(Character(UnicodeScalar((n >> 8) & 255)!))
+        s.append(Character(UnicodeScalar(n & 255)!))
+        return s
+    }
 }

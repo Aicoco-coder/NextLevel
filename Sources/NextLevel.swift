@@ -435,7 +435,35 @@ public class NextLevel: NSObject {
             self._currentDevice
         }
     }
-
+    
+    public var is48MPSupported: Bool {
+        guard let currentDevice else {
+            return false
+        }
+        if #available(iOS 16.0, *) {
+            return currentDevice.activeFormat.supportedMaxPhotoDimensions.first(where: { Int($0.megapixels) == 48}) != nil
+        } else {
+            return false
+        }
+    }
+    
+    public var is48MPEnabled: Bool = false {
+        didSet {
+            guard let currentDevice, let photoOutput = _photoOutput else {
+                return
+            }
+            if is48MPEnabled {
+                if #available(iOS 16.0, *) {
+                    if let dimension48MP = currentDevice.activeFormat.supportedMaxPhotoDimensions.first(where: { Int($0.megapixels) == 48}) {
+                        photoOutput.maxPhotoDimensions = dimension48MP
+                    }
+                } else {
+                    photoOutput.isHighResolutionCaptureEnabled = true
+                }
+            }
+        }
+    }
+    
     // MARK: - private instance vars
 
     internal var _sessionQueue: DispatchQueue
@@ -1158,21 +1186,23 @@ extension NextLevel {
         if let session = self._captureSession, let photoOutput = self._photoOutput {
             if session.canAddOutput(photoOutput) {
                 session.addOutput(photoOutput)
-                if self.photoConfiguration.isRawCaptureEnabled {
-                    if #available(iOS 14.3, *) {
-                        photoOutput.isAppleProRAWEnabled = photoOutput.isAppleProRAWSupported
-                    }
-                }
-                photoOutput.isHighResolutionCaptureEnabled = true
                 photoOutput.maxPhotoQualityPrioritization = .quality
                 if photoOutput.isPortraitEffectsMatteDeliverySupported {
                     photoOutput.isPortraitEffectsMatteDeliveryEnabled = self.photoConfiguration.isPortraitEffectsMatteEnabled
                 }
-                if #available(iOS 17.0, *) {
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                    if #available(iOS 17.0, *) {
                         if photoOutput.isZeroShutterLagSupported {
                             photoOutput.isZeroShutterLagEnabled = self.photoConfiguration.isZeroShutterLagEnabled
                             self.log("photoOutput.isZeroShutterLagEnabled = \(self.photoConfiguration.isZeroShutterLagEnabled)")
+                        }
+                    }
+                    if self.is48MPEnabled {
+                        self.is48MPEnabled = true
+                    }
+                    if #available(iOS 14.3, *) {
+                        if photoOutput.isAppleProRAWSupported {
+                            photoOutput.isAppleProRAWEnabled = true
                         }
                     }
                 }
@@ -2755,6 +2785,8 @@ extension NextLevel {
         guard let photoOutput = self._photoOutput, let _ = photoOutput.connection(with: AVMediaType.video) else {
             return
         }
+        //let formatTypes = photoOutput.availableRawPhotoPixelFormatTypes.map { $0.toString }
+        //log("===> formatTypes:\(formatTypes)")
         var photoSettings: AVCapturePhotoSettings
         var rawFormat: OSType?
         if self.photoConfiguration.isRawCaptureEnabled {
@@ -2802,7 +2834,6 @@ extension NextLevel {
                     ]
                 }
             }
-            photoSettings.isHighResolutionPhotoEnabled = flashConnectedMode ? true : self.photoConfiguration.isHighResolutionEnabled
             let systemVersion = ProcessInfo.processInfo.operatingSystemVersion
             //log("systemVersion:\(systemVersion)")
             if flashConnectedMode {
@@ -2830,6 +2861,20 @@ extension NextLevel {
             }
 #endif
             
+        }
+        
+        if self.is48MPEnabled {
+            if #available(iOS 16.0, *) {
+                if let dimension48MP = currentDevice?.activeFormat.supportedMaxPhotoDimensions.first(where: { Int($0.megapixels) == 48}) {
+                    //log("dimension48MP:\(dimension48MP)")
+                    if photoOutput.maxPhotoDimensions < dimension48MP {
+                        photoOutput.maxPhotoDimensions = dimension48MP
+                    }
+                    photoSettings.maxPhotoDimensions = dimension48MP
+                }
+            } else {
+                photoSettings.isHighResolutionPhotoEnabled = true
+            }
         }
         
         if self.isFlashAvailable {
