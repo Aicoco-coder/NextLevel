@@ -2789,7 +2789,13 @@ extension NextLevel {
         //log("===> formatTypes:\(formatTypes)")
         var photoSettings: AVCapturePhotoSettings
         var rawFormat: OSType?
-        if self.photoConfiguration.isRawCaptureEnabled {
+        var formatDictionary: [String : Any] = [
+            AVVideoCodecKey: AVVideoCodecType.jpeg
+        ]
+        if photoOutput.availablePhotoCodecTypes.contains(AVVideoCodecType.hevc) {
+            formatDictionary[AVVideoCodecKey] = AVVideoCodecType.hevc
+        }
+        if self.photoConfiguration.format.contains(.raw) {
             rawFormat = photoOutput.availableRawPhotoPixelFormatTypes.first
             if #available(iOS 14.3, *) {
                 let query = photoOutput.isAppleProRAWEnabled ?
@@ -2801,16 +2807,15 @@ extension NextLevel {
             }
         }
         if let rawFormat = rawFormat {
-            // Capture a RAW format photo, along with a processed format photo.
-            //let processedFormat = [AVVideoCodecKey: AVVideoCodecType.hevc]
+            let processedFormat = self.photoConfiguration.format.contains(.heif) ? formatDictionary : nil
             if flashConnectedMode {
                 let makeSettings = AVCaptureAutoExposureBracketedStillImageSettings.autoExposureSettings
                 let bracketedStillImageSettings = [-2].map { makeSettings(Float($0)) }
-                let settings = AVCapturePhotoBracketSettings.init(rawPixelFormatType: rawFormat, processedFormat: nil, bracketedSettings: bracketedStillImageSettings)
+                let settings = AVCapturePhotoBracketSettings.init(rawPixelFormatType: rawFormat, processedFormat: processedFormat, bracketedSettings: bracketedStillImageSettings)
                 settings.isLensStabilizationEnabled = photoOutput.isLensStabilizationDuringBracketedCaptureSupported
                 photoSettings = settings
             } else {
-                photoSettings = AVCapturePhotoSettings(rawPixelFormatType: rawFormat)
+                photoSettings = AVCapturePhotoSettings(rawPixelFormatType: rawFormat, processedFormat: processedFormat)
             }
             if self.photoConfiguration.generateThumbnail {
                 if let thumbnailPhotoCodecType = photoSettings.availableRawEmbeddedThumbnailPhotoCodecTypes.first {
@@ -2820,12 +2825,6 @@ extension NextLevel {
                 }
             }
         } else {
-            var formatDictionary: [String : Any] = [
-                AVVideoCodecKey: AVVideoCodecType.jpeg
-            ]
-            if photoOutput.availablePhotoCodecTypes.contains(AVVideoCodecType.hevc) {
-                formatDictionary[AVVideoCodecKey] = AVVideoCodecType.hevc
-            }
             photoSettings = AVCapturePhotoSettings(format: formatDictionary)
             if self.photoConfiguration.generateThumbnail {
                 if let thumbnailPhotoCodecType = photoSettings.availableEmbeddedThumbnailPhotoCodecTypes.first {

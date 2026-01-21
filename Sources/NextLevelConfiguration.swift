@@ -415,6 +415,16 @@ public class NextLevelAudioConfiguration: NextLevelConfiguration {
 }
 
 // MARK: - PhotoConfiguration
+public struct PhotoFormatOptions: OptionSet {
+    public let rawValue: Int
+    public init(rawValue: Int) {
+        self.rawValue = rawValue
+    }
+    public static let raw  = PhotoFormatOptions(rawValue: 1 << 0) // 1
+    public static let heif = PhotoFormatOptions(rawValue: 1 << 1) // 2
+    
+    public static let rawAndHeif: PhotoFormatOptions = [.raw, .heif]
+}
 
 /// NextLevelPhotoConfiguration, photo capture configuration object
 public class NextLevelPhotoConfiguration: NextLevelConfiguration {
@@ -439,7 +449,7 @@ public class NextLevelPhotoConfiguration: NextLevelConfiguration {
     /// Enables portrait effects matte output for the photo
     public var isPortraitEffectsMatteEnabled: Bool = false
 
-    public var isRawCaptureEnabled: Bool = false
+    public var format: PhotoFormatOptions = .heif
     public var isZeroShutterLagEnabled: Bool = true
 
     // MARK: - ivars
