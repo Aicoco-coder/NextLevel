@@ -453,6 +453,11 @@ public class NextLevel: NSObject {
                 return
             }
             if is48MPEnabled {
+                if #available(iOS 14.3, *) {
+                    if photoOutput.isAppleProRAWSupported {
+                        photoOutput.isAppleProRAWEnabled = true
+                    }
+                }
                 if #available(iOS 16.0, *) {
                     if let dimension48MP = currentDevice.activeFormat.supportedMaxPhotoDimensions.first(where: { Int($0.megapixels) == 48}) {
                         photoOutput.maxPhotoDimensions = dimension48MP
@@ -1199,11 +1204,6 @@ extension NextLevel {
                     }
                     if self.is48MPEnabled {
                         self.is48MPEnabled = true
-                    }
-                    if #available(iOS 14.3, *) {
-                        if photoOutput.isAppleProRAWSupported {
-                            photoOutput.isAppleProRAWEnabled = true
-                        }
                     }
                 }
                 self.addCaptureOutputObservers()
