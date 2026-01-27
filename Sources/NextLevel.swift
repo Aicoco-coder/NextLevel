@@ -2800,7 +2800,7 @@ extension NextLevel {
     }
 
     /// Triggers a photo capture.
-    public func capturePhoto(flashConnectedMode: Bool = false) {
+    public func capturePhoto(flashConnectedMode: Bool = false, completion: ((AVCapturePhotoSettings)->Void)? = nil) {
         guard let photoOutput = self._photoOutput, let _ = photoOutput.connection(with: AVMediaType.video) else {
             return
         }
@@ -2906,6 +2906,7 @@ extension NextLevel {
             // Fallback on earlier versions
         }
         photoOutput.capturePhoto(with: photoSettings, delegate: self)
+        completion?(photoSettings)
     }
 
 }
