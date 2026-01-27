@@ -447,17 +447,36 @@ public class NextLevel: NSObject {
         }
     }
     
+    public var isAppleProRAWEnabled: Bool {
+        set {
+            guard let photoOutput = _photoOutput else {
+                return
+            }
+            if #available(iOS 14.3, *) {
+                if photoOutput.isAppleProRAWSupported {
+                    photoOutput.isAppleProRAWEnabled = newValue
+                }
+            }
+        }
+        get {
+            guard let photoOutput = _photoOutput else {
+                return false
+            }
+            if #available(iOS 14.3, *) {
+                return photoOutput.isAppleProRAWEnabled
+            } else {
+                return false
+            }
+        }
+    }
+    
     public var is48MPEnabled: Bool = false {
         didSet {
             guard let currentDevice, let photoOutput = _photoOutput else {
                 return
             }
             if is48MPEnabled {
-                if #available(iOS 14.3, *) {
-                    if photoOutput.isAppleProRAWSupported {
-                        photoOutput.isAppleProRAWEnabled = true
-                    }
-                }
+                isAppleProRAWEnabled = true
                 if #available(iOS 16.0, *) {
                     if let dimension48MP = currentDevice.activeFormat.supportedMaxPhotoDimensions.first(where: { Int($0.megapixels) == 48}) {
                         photoOutput.maxPhotoDimensions = dimension48MP
