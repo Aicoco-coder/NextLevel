@@ -452,9 +452,11 @@ public class NextLevel: NSObject {
             guard let photoOutput = _photoOutput else {
                 return
             }
-            if #available(iOS 14.3, *) {
-                if photoOutput.isAppleProRAWSupported {
-                    photoOutput.isAppleProRAWEnabled = newValue
+            self.executeClosureAsyncOnSessionQueueIfNecessary {
+                if #available(iOS 14.3, *) {
+                    if photoOutput.isAppleProRAWSupported {
+                        photoOutput.isAppleProRAWEnabled = newValue
+                    }
                 }
             }
         }
@@ -477,12 +479,14 @@ public class NextLevel: NSObject {
             }
             if is48MPEnabled {
                 isAppleProRAWEnabled = true
-                if #available(iOS 16.0, *) {
-                    if let dimension48MP = currentDevice.activeFormat.supportedMaxPhotoDimensions.first(where: { Int($0.megapixels) == 48}) {
-                        photoOutput.maxPhotoDimensions = dimension48MP
+                self.executeClosureAsyncOnSessionQueueIfNecessary {
+                    if #available(iOS 16.0, *) {
+                        if let dimension48MP = currentDevice.activeFormat.supportedMaxPhotoDimensions.first(where: { Int($0.megapixels) == 48}) {
+                            photoOutput.maxPhotoDimensions = dimension48MP
+                        }
+                    } else {
+                        photoOutput.isHighResolutionCaptureEnabled = true
                     }
-                } else {
-                    photoOutput.isHighResolutionCaptureEnabled = true
                 }
             }
         }
