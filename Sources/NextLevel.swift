@@ -1543,9 +1543,12 @@ extension NextLevel {
 
     internal func updateVideoOutputSettings() {
         if let videoOutput = self._videoOutput {
-            if let videoConnection = videoOutput.connection(with: AVMediaType.video) {
-                if videoConnection.isVideoStabilizationSupported {
-                    videoConnection.preferredVideoStabilizationMode = self.videoStabilizationMode
+            if captureMode == .video || captureMode == .videoWithoutAudio {
+                // 拍照模式下不要设置，否则拍照防抖就没有效果了
+                if let videoConnection = videoOutput.connection(with: AVMediaType.video) {
+                    if videoConnection.isVideoStabilizationSupported {
+                        videoConnection.preferredVideoStabilizationMode = self.videoStabilizationMode
+                    }
                 }
             }
         }
