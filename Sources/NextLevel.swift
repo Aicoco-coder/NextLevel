@@ -2828,6 +2828,9 @@ extension NextLevel {
             formatDictionary[AVVideoCodecKey] = AVVideoCodecType.hevc
         }
         if self.photoConfiguration.format.contains(.raw) {
+            if !useProRAWPixelFormat {
+                videoZoomFactor = 1.0
+            }
             rawFormat = photoOutput.availableRawPhotoPixelFormatTypes.first
             if #available(iOS 14.3, *) {
                 let query = useProRAWPixelFormat ?
