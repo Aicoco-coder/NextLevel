@@ -2797,7 +2797,13 @@ extension NextLevel {
 // MARK: - photo capture
 
 extension NextLevel {
-
+    public var useProRAWPixelFormat: Bool {
+        if #available(iOS 14.3, *) {
+            return _photoOutput?.isAppleProRAWEnabled == true && is48MPEnabled && is48MPSupported
+        } else {
+            return false
+        }
+    }
     /// Checks if a photo capture operation can be performed, based on available storage space and supported hardware functionality.
     public var canCapturePhoto: Bool {
         get {
@@ -2824,7 +2830,7 @@ extension NextLevel {
         if self.photoConfiguration.format.contains(.raw) {
             rawFormat = photoOutput.availableRawPhotoPixelFormatTypes.first
             if #available(iOS 14.3, *) {
-                let query = (photoOutput.isAppleProRAWEnabled && is48MPEnabled && is48MPSupported) ?
+                let query = useProRAWPixelFormat ?
                 { AVCapturePhotoOutput.isAppleProRAWPixelFormat($0) } :
                 { AVCapturePhotoOutput.isBayerRAWPixelFormat($0) }
                 if let format = photoOutput.availableRawPhotoPixelFormatTypes.first(where: query) {
