@@ -2824,7 +2824,7 @@ extension NextLevel {
         if self.photoConfiguration.format.contains(.raw) {
             rawFormat = photoOutput.availableRawPhotoPixelFormatTypes.first
             if #available(iOS 14.3, *) {
-                let query = photoOutput.isAppleProRAWEnabled ?
+                let query = (photoOutput.isAppleProRAWEnabled && is48MPEnabled && is48MPSupported) ?
                 { AVCapturePhotoOutput.isAppleProRAWPixelFormat($0) } :
                 { AVCapturePhotoOutput.isBayerRAWPixelFormat($0) }
                 if let format = photoOutput.availableRawPhotoPixelFormatTypes.first(where: query) {
