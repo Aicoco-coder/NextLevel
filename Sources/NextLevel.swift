@@ -1154,7 +1154,11 @@ extension NextLevel {
                 if let formatTypes = self._videoOutput?.availableVideoPixelFormatTypes {
                     var supportsFullRange = false
                     var supportsVideoRange = false
+                    var supportsBGRA = false
                     for format in formatTypes {
+                        if format == Int(kCVPixelFormatType_32BGRA) {
+                            supportsBGRA = true
+                        }
                         if format == Int(kCVPixelFormatType_420YpCbCr8BiPlanarFullRange) {
                             supportsFullRange = true
                         }
@@ -1162,7 +1166,9 @@ extension NextLevel {
                             supportsVideoRange = true
                         }
                     }
-                    if supportsFullRange {
+                    if supportsBGRA {
+                        videoSettings[String(kCVPixelBufferPixelFormatTypeKey)] = Int(kCVPixelFormatType_32BGRA)
+                    } else if supportsFullRange {
                         videoSettings[String(kCVPixelBufferPixelFormatTypeKey)] = Int(kCVPixelFormatType_420YpCbCr8BiPlanarFullRange)
                     } else if supportsVideoRange {
                         videoSettings[String(kCVPixelBufferPixelFormatTypeKey)] = Int(kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange)
