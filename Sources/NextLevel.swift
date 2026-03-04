@@ -3757,10 +3757,10 @@ extension NextLevel {
             var format_r4K_f60_fullRange: AVCaptureDevice.Format?
             var format_r4K_f60_videoRange: AVCaptureDevice.Format?
             //print("formatType:\(kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange),\(kCVPixelFormatType_420YpCbCr8BiPlanarFullRange)")
-            let dict: [OSType: String] = [
-                kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange: "videoRange",
-                kCVPixelFormatType_420YpCbCr8BiPlanarFullRange: "fullRange"
-            ]
+//            let dict: [OSType: String] = [
+//                kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange: "videoRange",
+//                kCVPixelFormatType_420YpCbCr8BiPlanarFullRange: "fullRange"
+//            ]
             for format in currentDevice.formats {
                 // 1. 检查分辨率
                 let dimensions = CMVideoFormatDescriptionGetDimensions(format.formatDescription)
