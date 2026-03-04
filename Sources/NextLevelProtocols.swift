@@ -99,6 +99,7 @@ public protocol NextLevelDeviceDelegate: AnyObject {
     // aperture, lens
     func nextLevel(_ nextLevel: NextLevel, didChangeCleanAperture cleanAperture: CGRect)
     func nextLevel(_ nextLevel: NextLevel, didChangeLensPosition lensPosition: Float)
+    func nextLevel(_ nextLevel: NextLevel, didChangeFocusMode focusMode: AVCaptureDevice.FocusMode)
 
     // focus, exposure, white balance
     func nextLevelWillStartFocus(_ nextLevel: NextLevel)
@@ -114,6 +115,7 @@ public protocol NextLevelDeviceDelegate: AnyObject {
     func nextLevel(_ nextLevel: NextLevel, didChangeExposureTargetBias exposureTargetBias: Float)
     func nextLevelDidChangeWhiteBalanceGains(_ nextLevel: NextLevel)
     func nextLevel(_ nextLevel: NextLevel, didChangeWhiteBalanceMode whiteBalanceMode: AVCaptureDevice.WhiteBalanceMode)
+    func nextLevel(_ nextLevel: NextLevel, didChangeISO iso: Float)
 }
 
 public extension NextLevelDeviceDelegate {

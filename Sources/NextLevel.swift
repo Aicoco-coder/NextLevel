@@ -32,6 +32,7 @@ import Metal
 #if USE_ARKIT
 import ARKit
 #endif
+import VideoToolbox
 
 //public protocol AVCaptureVideoPreivewLayerProtocol: NSObjectProtocol {
 //    var session: AVCaptureSession? { get set }
@@ -231,6 +232,8 @@ public enum NextLevelError: Error, CustomStringConvertible {
 }
 
 private let NextLevelCaptureSessionQueueIdentifier = "engineering.NextLevel.CaptureSession"
+private let NextLevelCaptureSessionVideoQueueIdentifier = "engineering.NextLevel.CaptureSession.Video"
+private let NextLevelCaptureSessionAudioQueueIdentifier = "engineering.NextLevel.CaptureSession.Audio"
 private let NextLevelCaptureSessionQueueSpecificKey = DispatchSpecificKey<()>()
 #if USE_TRUE_DEPTH
 private let NextLevelDepthDataQueueIdentifier = "engineering.NextLevel.DepthData"
@@ -495,6 +498,8 @@ public class NextLevel: NSObject {
     // MARK: - private instance vars
 
     internal var _sessionQueue: DispatchQueue
+    internal var _sessionVideoQueue: DispatchQueue
+    internal var _sessionAudioQueue: DispatchQueue
     internal var _sessionConfigurationCount: Int = 0
 
     internal var _recording: Bool = false
@@ -556,6 +561,8 @@ public class NextLevel: NSObject {
         self.previewLayer?.videoGravity = AVLayerVideoGravity.resizeAspectFill
 
         self._sessionQueue = DispatchQueue(label: NextLevelCaptureSessionQueueIdentifier, qos: .userInteractive, target: DispatchQueue.global())
+        self._sessionVideoQueue = DispatchQueue(label: NextLevelCaptureSessionVideoQueueIdentifier, qos: .userInitiated, target: DispatchQueue.global())
+        self._sessionAudioQueue = DispatchQueue(label: NextLevelCaptureSessionAudioQueueIdentifier, qos: .userInitiated, target: DispatchQueue.global())
         self._sessionQueue.setSpecific(key: NextLevelCaptureSessionQueueSpecificKey, value: ())
 
         self.videoConfiguration = NextLevelVideoConfiguration()
@@ -1181,7 +1188,7 @@ extension NextLevel {
         if let session = self._captureSession, let videoOutput = self._videoOutput {
             if session.canAddOutput(videoOutput) {
                 session.addOutput(videoOutput)
-                videoOutput.setSampleBufferDelegate(self, queue: self._sessionQueue)
+                videoOutput.setSampleBufferDelegate(self, queue: self._sessionVideoQueue)
 
                 //self.updateVideoOutputSettings()
 
@@ -1202,7 +1209,7 @@ extension NextLevel {
         if let session = self._captureSession, let audioOutput = self._audioOutput {
             if session.canAddOutput(audioOutput) {
                 session.addOutput(audioOutput)
-                audioOutput.setSampleBufferDelegate(self, queue: self._sessionQueue)
+                audioOutput.setSampleBufferDelegate(self, queue: self._sessionAudioQueue)
                 return true
             }
         }
@@ -1786,7 +1793,7 @@ extension NextLevel {
         }
         set {
             guard let device = self._currentDevice,
-                device.focusMode == .locked,
+                //device.focusMode == .locked,
                 device.isFocusModeSupported(.locked)
                 else {
                     return
@@ -3185,7 +3192,9 @@ extension NextLevel: AVCaptureVideoDataOutputSampleBufferDelegate, AVCaptureAudi
             }
         }
     }
-
+    public func captureOutput(_ output: AVCaptureOutput, didDrop sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {
+        log("丢帧,presentationTimeStamp:\(sampleBuffer.presentationTimeStamp.seconds)")
+    }
 }
 
 // MARK: - AVCaptureFileOutputDelegate
@@ -3549,14 +3558,20 @@ extension NextLevel {
         })
 
         self._observers.append(currentDevice.observe(\.lensPosition, options: [.new]) { [weak self] object, _ in
-            guard let strongSelf = self else {
+            guard let self else {
                 return
             }
-
-            if object.focusMode != .locked {
-                DispatchQueue.main.async {
-                    strongSelf.deviceDelegate?.nextLevel(strongSelf, didChangeLensPosition: object.lensPosition)
-                }
+            DispatchQueue.main.async {
+                self.deviceDelegate?.nextLevel(self, didChangeLensPosition: object.lensPosition)
+            }
+        })
+        
+        self._observers.append(currentDevice.observe(\.focusMode, options: [.new]) { [weak self] object, _ in
+            guard let self else {
+                return
+            }
+            DispatchQueue.main.async {
+                self.deviceDelegate?.nextLevel(self, didChangeFocusMode: object.focusMode)
             }
         })
 
@@ -3570,12 +3585,14 @@ extension NextLevel {
 			}
         })
 
-        self._observers.append(currentDevice.observe(\.iso, options: [.new]) { [weak self] _, _ in
-            guard let _ = self else {
+        self._observers.append(currentDevice.observe(\.iso, options: [.new]) { [weak self] object, _ in
+            guard let strongSelf = self else {
                 return
             }
 
-            // TODO: add delegate callback
+            DispatchQueue.main.async {
+                strongSelf.deviceDelegate?.nextLevel(strongSelf, didChangeISO: object.iso)
+            }
         })
 
         self._observers.append(currentDevice.observe(\.exposureTargetBias, options: [.new]) { [weak self] object, change in
@@ -3677,4 +3694,245 @@ extension NextLevel {
         self._captureOutputObservers.removeAll()
     }
 
+}
+
+extension NextLevel {
+    public enum VideoPreset {
+        case r1080P_f30
+        case r1080P_f60
+        case r4K_f30
+        case r4K_f60
+    }
+    public var isSupportedHevc: Bool {
+        let isSupported = VTIsHardwareDecodeSupported(kCMVideoCodecType_HEVC)
+        return isSupported
+    }
+    public var supportedPresets: [VideoPreset] {
+        var videoPresets: [VideoPreset] = []
+        self.executeClosureSyncOnSessionQueueIfNecessary {
+            guard let currentDevice = self.currentDevice else {
+                return
+            }
+            for format in currentDevice.formats {
+                // 1. 检查分辨率
+                let dimensions = CMVideoFormatDescriptionGetDimensions(format.formatDescription)
+                if dimensions.width * dimensions.height == 1080 * 1920 {
+                    // 2. 检查帧率范围
+                    let ranges = format.videoSupportedFrameRateRanges
+                    for range in ranges {
+                        if range.minFrameRate <= 30 && range.maxFrameRate >= 30 {
+                            videoPresets.append(.r1080P_f30)
+                        } else if range.minFrameRate <= 60 && range.maxFrameRate >= 60 {
+                            videoPresets.append(.r1080P_f60)
+                        }
+                    }
+                } else if dimensions.width * dimensions.height == 3840 * 2160 {
+                    // 2. 检查帧率范围
+                    let ranges = format.videoSupportedFrameRateRanges
+                    for range in ranges {
+                        if range.minFrameRate <= 30 && range.maxFrameRate >= 30 {
+                            videoPresets.append(.r4K_f30)
+                        } else if range.minFrameRate <= 60 && range.maxFrameRate >= 60 {
+                            videoPresets.append(.r4K_f60)
+                        }
+                    }
+                }
+            }
+        }
+        return videoPresets
+    }
+    public func setVideoPreset(_ preset: VideoPreset, completion:((VideoPreset?)->Void)?) {
+        self.executeClosureAsyncOnSessionQueueIfNecessary { [weak self] in
+            var resultPreset: VideoPreset? = nil
+            guard let self, let currentDevice = self.currentDevice else {
+                completion?(nil)
+                return
+            }
+            var format_r1080P_f30_fullRange: AVCaptureDevice.Format?
+            var format_r1080P_f30_videoRange: AVCaptureDevice.Format?
+            var format_r1080P_f60_fullRange: AVCaptureDevice.Format?
+            var format_r1080P_f60_videoRange: AVCaptureDevice.Format?
+            var format_r4K_f30_fullRange: AVCaptureDevice.Format?
+            var format_r4K_f30_videoRange: AVCaptureDevice.Format?
+            var format_r4K_f60_fullRange: AVCaptureDevice.Format?
+            var format_r4K_f60_videoRange: AVCaptureDevice.Format?
+            //print("formatType:\(kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange),\(kCVPixelFormatType_420YpCbCr8BiPlanarFullRange)")
+            let dict: [OSType: String] = [
+                kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange: "videoRange",
+                kCVPixelFormatType_420YpCbCr8BiPlanarFullRange: "fullRange"
+            ]
+            for format in currentDevice.formats {
+                // 1. 检查分辨率
+                let dimensions = CMVideoFormatDescriptionGetDimensions(format.formatDescription)
+                let subType = CMFormatDescriptionGetMediaSubType(format.formatDescription)
+                if dimensions.width * dimensions.height == 1080 * 1920 {
+                    // 2. 检查帧率范围
+                    let ranges = format.videoSupportedFrameRateRanges
+                    for range in ranges {
+                        if range.maxFrameRate == 30 {
+                            if subType == kCVPixelFormatType_420YpCbCr8BiPlanarFullRange {
+                                format_r1080P_f30_fullRange = format
+                            } else if subType == kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange {
+                                format_r1080P_f30_videoRange = format
+                            }
+                            //print("format:\(format) -> \(dict[subType] ?? "unknow")")
+                        } else if range.maxFrameRate == 60 {
+                            if subType == kCVPixelFormatType_420YpCbCr8BiPlanarFullRange {
+                                format_r1080P_f60_fullRange = format
+                            } else if subType == kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange {
+                                format_r1080P_f60_videoRange = format
+                            }
+                            //print("format:\(format) -> \(dict[subType] ?? "unknow")")
+                        }
+                    }
+                } else if dimensions.width * dimensions.height == 3840 * 2160 {
+                    // 2. 检查帧率范围
+                    let ranges = format.videoSupportedFrameRateRanges
+                    for range in ranges {
+                        if range.maxFrameRate == 30 {
+                            if subType == kCVPixelFormatType_420YpCbCr8BiPlanarFullRange {
+                                format_r4K_f30_fullRange = format
+                            } else if subType == kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange {
+                                format_r4K_f30_videoRange = format
+                            }
+                            //print("format:\(format) -> \(dict[subType] ?? "unknow")")
+                        } else if range.maxFrameRate == 60 {
+                            if subType == kCVPixelFormatType_420YpCbCr8BiPlanarFullRange {
+                                format_r4K_f60_fullRange = format
+                            } else if subType == kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange {
+                                format_r4K_f60_videoRange = format
+                            }
+                            //print("format:\(format) -> \(dict[subType] ?? "unknow")")
+                        }
+                    }
+                }
+            }
+            var activeFormat: AVCaptureDevice.Format?
+            var fps: Int = 30
+            var debugString = ""
+            switch preset {
+            case .r1080P_f30:
+                if let format = format_r1080P_f30_fullRange {
+                    activeFormat = format
+                } else if let format = format_r1080P_f30_videoRange {
+                    activeFormat = format
+                }
+                fps = 30
+                debugString = "1080P"
+                resultPreset = .r1080P_f30
+            case .r1080P_f60:
+                if let format = format_r1080P_f60_fullRange {
+                    activeFormat = format
+                    fps = 60
+                    debugString = "1080P"
+                    resultPreset = .r1080P_f60
+                } else if let format = format_r1080P_f60_videoRange {
+                    activeFormat = format
+                    fps = 60
+                    debugString = "1080P"
+                    resultPreset = .r1080P_f60
+                } else if let format = format_r1080P_f30_fullRange {
+                    activeFormat = format
+                    fps = 30
+                    debugString = "1080P"
+                    resultPreset = .r1080P_f30
+                } else if let format = format_r1080P_f30_videoRange {
+                    activeFormat = format
+                    fps = 30
+                    debugString = "1080P"
+                    resultPreset = .r1080P_f30
+                }
+            case .r4K_f30:
+                if let format = format_r4K_f30_fullRange {
+                    activeFormat = format
+                    fps = 30
+                    debugString = "4K"
+                    resultPreset = .r4K_f30
+                } else if let format = format_r4K_f30_videoRange {
+                    activeFormat = format
+                    fps = 30
+                    debugString = "4K"
+                    resultPreset = .r4K_f30
+                } else if let format = format_r1080P_f30_fullRange {
+                    activeFormat = format
+                    fps = 30
+                    debugString = "1080P"
+                    resultPreset = .r1080P_f30
+                } else if let format = format_r1080P_f30_videoRange {
+                    activeFormat = format
+                    fps = 30
+                    debugString = "1080P"
+                    resultPreset = .r1080P_f30
+                }
+            case .r4K_f60:
+                if let format = format_r4K_f60_fullRange {
+                    activeFormat = format
+                    fps = 60
+                    debugString = "4K"
+                    resultPreset = .r4K_f60
+                } else if let format = format_r4K_f60_videoRange {
+                    activeFormat = format
+                    fps = 60
+                    debugString = "4K"
+                    resultPreset = .r4K_f60
+                } else if let format = format_r4K_f30_fullRange {
+                    activeFormat = format
+                    fps = 30
+                    debugString = "4K"
+                    resultPreset = .r4K_f30
+                } else if let format = format_r4K_f30_videoRange {
+                    activeFormat = format
+                    fps = 30
+                    debugString = "4K"
+                    resultPreset = .r4K_f30
+                } else if let format = format_r1080P_f60_fullRange {
+                    activeFormat = format
+                    fps = 60
+                    debugString = "1080P"
+                    resultPreset = .r1080P_f60
+                } else if let format = format_r1080P_f60_videoRange {
+                    activeFormat = format
+                    fps = 60
+                    debugString = "1080P"
+                    resultPreset = .r1080P_f60
+                } else if let format = format_r1080P_f30_fullRange {
+                    activeFormat = format
+                    fps = 30
+                    debugString = "1080P"
+                    resultPreset = .r1080P_f30
+                } else if let format = format_r1080P_f30_videoRange {
+                    activeFormat = format
+                    fps = 30
+                    debugString = "1080P"
+                    resultPreset = .r1080P_f30
+                }
+            }
+            guard let activeFormat else {
+                self.log("设置失败:activeFormat = nil")
+                completion?(nil)
+                return
+            }
+            guard activeFormat != currentDevice.activeFormat else {
+                self.log("activeFormat == currentDevice.activeFormat")
+                completion?(nil)
+                return
+            }
+            do {
+                try currentDevice.lockForConfiguration()
+                
+                currentDevice.activeFormat = activeFormat
+                if let frameRate = activeFormat.videoSupportedFrameRateRanges.first(where: {Int($0.maxFrameRate) == fps}) ?? activeFormat.videoSupportedFrameRateRanges.first {
+                    currentDevice.activeVideoMinFrameDuration = frameRate.minFrameDuration
+                    currentDevice.activeVideoMaxFrameDuration = frameRate.minFrameDuration
+                }
+                
+                currentDevice.unlockForConfiguration()
+                self.log("成功切换至: \(debugString) @ \(fps)fps format:\(currentDevice.activeFormat)")
+                completion?(resultPreset)
+            } catch {
+                self.log("锁定设备失败: \(error)")
+                completion?(nil)
+            }
+        }
+    }
 }
