@@ -306,12 +306,14 @@ public class NextLevel: NSObject {
             self.delegate?.nextLevelCaptureModeWillChange(self)
 
             self.executeClosureAsyncOnSessionQueueIfNecessary {
+                self.captureSession?.stopRunning()
                 self._requestedDevice = self._currentDevice;
                 self.configureSession()
                 self.configureSessionDevices()
                 self.configureMetadataObjects()
                 self.updateVideoOrientation()
                 self.updateVideoOutputSettings()
+                self.captureSession?.startRunning()
                 DispatchQueue.main.async {
                     self.delegate?.nextLevelCaptureModeDidChange(self)
                 }
@@ -1390,10 +1392,10 @@ extension NextLevel {
             }
             break
         case .photo:
-//            if let videoOutput = self._videoOutput, session.outputs.contains(videoOutput) {
-//                session.removeOutput(videoOutput)
-//                self._videoOutput = nil
-//            }
+            if let videoOutput = self._videoOutput, session.outputs.contains(videoOutput) {
+                session.removeOutput(videoOutput)
+                self._videoOutput = nil
+            }
             if let audioOutput = self._audioOutput, session.outputs.contains(audioOutput) {
                 session.removeOutput(audioOutput)
                 self._audioOutput = nil
@@ -3917,6 +3919,7 @@ extension NextLevel {
                 completion?(nil)
                 return
             }
+            captureSession?.stopRunning()
             do {
                 try currentDevice.lockForConfiguration()
                 
@@ -3933,6 +3936,7 @@ extension NextLevel {
                 self.log("锁定设备失败: \(error)")
                 completion?(nil)
             }
+            captureSession?.startRunning()
         }
     }
 }

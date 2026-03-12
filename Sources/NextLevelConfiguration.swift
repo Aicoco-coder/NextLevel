@@ -348,7 +348,7 @@ public class NextLevelAudioConfiguration: NextLevelConfiguration {
     // MARK: - properties
 
     /// Audio bit rate, AV dictionary key AVEncoderBitRateKey
-    public var bitRate: Int = NextLevelAudioConfiguration.AudioBitRateDefault
+    public var bitRate: Int?
 
     /// Sample rate in hertz, AV dictionary key AVSampleRateKey
     public var sampleRate: Float64?
@@ -379,9 +379,11 @@ public class NextLevelAudioConfiguration: NextLevelConfiguration {
         if let options = self.options {
             return options
         }
-
-        var config: [String: Any] = [AVEncoderBitRateKey: NSNumber(integerLiteral: self.bitRate)]
-
+        
+        var config: [String: Any] = [:]
+        if let bitRate = self.bitRate {
+            config[AVEncoderBitRateKey] = NSNumber(integerLiteral: bitRate)
+        }
         if let sampleBuffer = sampleBuffer, let formatDescription: CMFormatDescription = CMSampleBufferGetFormatDescription(sampleBuffer) {
             if let _ = self.sampleRate, let _ = self.channelsCount {
                 // loading user provided settings after buffer use
