@@ -3421,7 +3421,15 @@ extension NextLevel {
                     self.log("NextLevel, error, media services are not available in the background")
                 case .mediaServicesWereReset:
                     self.log("NextLevel, error, mediaServicesWereReset")
-                    if self.isSessionPause == false, UIApplication.shared.applicationState == .active {
+                    var applicationState: UIApplication.State?
+                    if Thread.isMainThread {
+                        applicationState = UIApplication.shared.applicationState
+                    } else {
+                        DispatchQueue.main.sync {
+                            applicationState = UIApplication.shared.applicationState
+                        }
+                    }
+                    if self.isSessionPause == false, applicationState == .active {
                         if self.recoverSessionTryCount < 1 {
                             self.recoverSessionTryCount += 1
                             NextLevel.shared.pauseSession(true)
