@@ -2843,8 +2843,10 @@ extension NextLevel {
             formatDictionary[AVVideoCodecKey] = AVVideoCodecType.hevc
         }
         if self.photoConfiguration.format.contains(.raw) {
-            if !useProRAWPixelFormat {
+            if !useProRAWPixelFormat, videoZoomFactor != 1.0 {
                 videoZoomFactor = 1.0
+                // 防止崩溃
+                return
             }
             rawFormat = photoOutput.availableRawPhotoPixelFormatTypes.first
             if #available(iOS 14.3, *) {
