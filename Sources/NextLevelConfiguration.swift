@@ -63,7 +63,7 @@ public class NextLevelConfiguration {
         case instagramLandscape
         case instagramStories
         case cinematic
-        case custom(w: Int, h: Int)
+        case custom(w: Double, h: Double)
 
         public var dimensions: CGSize? {
             get {
@@ -212,6 +212,7 @@ public class NextLevelVideoConfiguration: NextLevelConfiguration {
     /// Maximum interval between key frames, 1 meaning key frames only, AV dictionary key AVVideoMaxKeyFrameIntervalKey
     public var maxKeyFrameInterval: Int?
     public var frameRate: Int?
+    public var colorProperties: [String: Any]?
 
     /// Video time scale, value/timescale = seconds
     public var timescale: Float64?
@@ -269,7 +270,7 @@ public class NextLevelVideoConfiguration: NextLevelConfiguration {
                 break
             case .custom(let w, let h):
                 config[AVVideoWidthKey] = NSNumber(integerLiteral: Int(videoDimensions.width))
-                config[AVVideoHeightKey] = NSNumber(integerLiteral: Int(videoDimensions.width * Int32(h) / Int32(w)))
+                config[AVVideoHeightKey] = NSNumber(integerLiteral: Int(Double(videoDimensions.width) * h / w))
                 break
             case .active:
                 fallthrough
@@ -305,6 +306,9 @@ public class NextLevelVideoConfiguration: NextLevelConfiguration {
         }
 
         config[AVVideoCompressionPropertiesKey] = (compressionDict as NSDictionary)
+        if let colorProperties {
+            config[AVVideoColorPropertiesKey] = colorProperties
+        }
         return config
     }
 
@@ -343,7 +347,7 @@ public class NextLevelAudioConfiguration: NextLevelConfiguration {
 
     public static let AudioBitRateDefault: Int = 96000
     public static let AudioSampleRateDefault: Float64 = 44100
-    public static let AudioChannelsCountDefault: Int = 2
+    public static let AudioChannelsCountDefault: Int = 1
 
     // MARK: - properties
 
@@ -375,40 +379,64 @@ public class NextLevelAudioConfiguration: NextLevelConfiguration {
     /// - Parameter sampleBuffer: Sample buffer for extracting configuration information
     /// - Returns: Audio configuration dictionary for AVFoundation
     override public func avcaptureSettingsDictionary(sampleBuffer: CMSampleBuffer? = nil, pixelBuffer: CVPixelBuffer? = nil) -> [String: Any]? {
-        // if the client specified custom options, use those instead
+        // 1. 如果用户手动设置了硬性选项，直接返回
         if let options = self.options {
             return options
         }
         
         var config: [String: Any] = [:]
+        
+        // 初始默认值
+        var finalChannelsCount = 1
+        var hardwareLayoutData: Data? = nil
+        var hardwareChannelsCount: Int = 1
+
+        // 2. 从 SampleBuffer 中提取硬件真实能力
+        if let sampleBuffer = sampleBuffer,
+           let formatDescription = CMSampleBufferGetFormatDescription(sampleBuffer) {
+            print("formatDescription:\(formatDescription)")
+            if let streamBasicDescription = CMAudioFormatDescriptionGetStreamBasicDescription(formatDescription) {
+                hardwareChannelsCount = Int(streamBasicDescription.pointee.mChannelsPerFrame)
+                
+                // 自动适配逻辑：硬件给多少，我们就录多少
+                finalChannelsCount = hardwareChannelsCount
+                
+                // 更新实例变量，同步状态
+                self.channelsCount = finalChannelsCount
+                if self.sampleRate == nil || self.sampleRate == 0 {
+                    self.sampleRate = streamBasicDescription.pointee.mSampleRate
+                }
+            }
+
+            // 提取硬件声道布局 (Channel Layout)
+            var layoutSize: Int = 0
+            if let currentChannelLayout = CMAudioFormatDescriptionGetChannelLayout(formatDescription, sizeOut: &layoutSize), layoutSize > 0 {
+                hardwareLayoutData = Data(bytes: currentChannelLayout, count: layoutSize)
+            }
+        } else {
+            // 如果没有 buffer（预初始化），使用默认设置或之前保存的设置
+            finalChannelsCount = self.channelsCount ?? (NextLevelAudioConfiguration.AudioChannelsCountDefault)
+        }
+        
+        // 3. 填充配置字典
+        // 设置声道数
+        config[AVNumberOfChannelsKey] = NSNumber(integerLiteral: finalChannelsCount)
+        
+        // 关键修复：只有当 Layout 的声道数与最终声道数一致时，才写入 AVChannelLayoutKey
+        // 这样如果硬件是立体声，我们就能保留立体声布局；如果是单声道，也不会因冲突崩溃
+        if let layoutData = hardwareLayoutData, finalChannelsCount == hardwareChannelsCount {
+            config[AVChannelLayoutKey] = layoutData
+        }
+
+        // 4. 其他常规音频参数设置
         if let bitRate = self.bitRate {
             config[AVEncoderBitRateKey] = NSNumber(integerLiteral: bitRate)
         }
-        if let sampleBuffer = sampleBuffer, let formatDescription: CMFormatDescription = CMSampleBufferGetFormatDescription(sampleBuffer) {
-            if let _ = self.sampleRate, let _ = self.channelsCount {
-                // loading user provided settings after buffer use
-            } else if let streamBasicDescription = CMAudioFormatDescriptionGetStreamBasicDescription(formatDescription) {
-                self.sampleRate = streamBasicDescription.pointee.mSampleRate
-                self.channelsCount = Int(streamBasicDescription.pointee.mChannelsPerFrame)
-            }
 
-            var layoutSize: Int = 0
-            if let currentChannelLayout = CMAudioFormatDescriptionGetChannelLayout(formatDescription, sizeOut: &layoutSize) {
-                let currentChannelLayoutData = layoutSize > 0 ? Data(bytes: currentChannelLayout, count: layoutSize) : Data()
-                config[AVChannelLayoutKey] = currentChannelLayoutData
-            }
-        }
-
-        if let sampleRate = self.sampleRate {
-            config[AVSampleRateKey] = sampleRate == 0 ? NSNumber(value: NextLevelAudioConfiguration.AudioSampleRateDefault) : NSNumber(value: sampleRate)
+        if let sampleRate = self.sampleRate, sampleRate > 0 {
+            config[AVSampleRateKey] = NSNumber(value: sampleRate)
         } else {
             config[AVSampleRateKey] = NSNumber(value: NextLevelAudioConfiguration.AudioSampleRateDefault)
-        }
-
-        if let channels = self.channelsCount {
-            config[AVNumberOfChannelsKey] = channels == 0 ? NSNumber(integerLiteral: NextLevelAudioConfiguration.AudioChannelsCountDefault) : NSNumber(integerLiteral: channels)
-        } else {
-            config[AVNumberOfChannelsKey] = NSNumber(integerLiteral: NextLevelAudioConfiguration.AudioChannelsCountDefault)
         }
 
         config[AVFormatIDKey] = NSNumber(value: self.format as UInt32)

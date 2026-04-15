@@ -583,7 +583,7 @@ extension NextLevelSession {
                             // print("ending session \(CMTimeGetSeconds(self._currentClipDuration))")
                             writer.endSession(atSourceTime: CMTimeAdd(self._currentClipDuration, self._startTimestamp))
                             writer.finishWriting(completionHandler: {
-                                self.executeClosureSyncOnSessionQueueIfNecessary {
+                                self.executeClosureAsyncOnSessionQueueIfNecessary {
                                     var clip: NextLevelClip?
                                     let url = writer.outputURL
                                     let error = writer.error

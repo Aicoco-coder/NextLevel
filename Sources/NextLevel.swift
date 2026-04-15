@@ -290,33 +290,36 @@ public class NextLevel: NSObject {
     // audio configuration
 
     /// Indicates whether the capture session automatically changes settings in the app’s shared audio session. By default, is `true`.
-    public var automaticallyConfiguresApplicationAudioSession: Bool = true
+    public var automaticallyConfiguresApplicationAudioSession: Bool = false
 
     // camera configuration
 
     /// The current capture mode of the device.
-    public var captureMode: NextLevelCaptureMode = .video {
-        didSet {
-            guard
-                self.captureMode != oldValue
-                else {
-                    return
-                }
+    public var captureMode: NextLevelCaptureMode = .video
+    
+    public func switchCaptureMode(_ mode: NextLevelCaptureMode) {
+        
+        guard self.isRunning else {
+            return
+        }
+        guard self.captureMode != mode else {
+            return
+        }
+        self.captureMode = mode
 
-            self.delegate?.nextLevelCaptureModeWillChange(self)
+        self.delegate?.nextLevelCaptureModeWillChange(self)
 
-            self.executeClosureAsyncOnSessionQueueIfNecessary {
-                self.captureSession?.stopRunning()
-                self._requestedDevice = self._currentDevice;
-                self.configureSession()
-                self.configureSessionDevices()
-                self.configureMetadataObjects()
-                self.updateVideoOrientation()
-                self.updateVideoOutputSettings()
-                self.captureSession?.startRunning()
-                DispatchQueue.main.async {
-                    self.delegate?.nextLevelCaptureModeDidChange(self)
-                }
+        self.executeClosureAsyncOnSessionQueueIfNecessary {
+            self.captureSession?.stopRunning()
+            self._requestedDevice = self._currentDevice;
+            self.configureSession()
+            self.configureSessionDevices()
+            self.configureMetadataObjects()
+            self.updateVideoOrientation()
+            self.updateVideoOutputSettings()
+            self.captureSession?.startRunning()
+            DispatchQueue.main.async {
+                self.delegate?.nextLevelCaptureModeDidChange(self)
             }
         }
     }
@@ -328,6 +331,9 @@ public class NextLevel: NSObject {
                 self.configureSessionDevices()
                 self.updateVideoOrientation()
                 self.updateVideoOutputSettings()
+                if self.isRunning {
+                    self.reloadAudioChannelSetting()
+                }
             }
         }
     }
@@ -493,6 +499,14 @@ public class NextLevel: NSObject {
                         photoOutput.isHighResolutionCaptureEnabled = true
                     }
                 }
+            }
+        }
+    }
+    
+    public var stereoOrientation: Orientation = .portrait {
+        didSet {
+            if isRunning {
+                reloadAudioChannelSetting()
             }
         }
     }
@@ -686,7 +700,210 @@ extension NextLevel {
 
 // MARK: - session start/stop
 
+public enum Orientation: Int {
+    case unknown = 0
+    case portrait = 1
+    case portraitUpsideDown = 2
+    case landscapeLeft = 4
+    case landscapeRight = 3
+}
+
+fileprivate extension Orientation {
+    // Convenience property to retrieve the AVAudioSession.StereoOrientation.
+    var inputOrientation: AVAudioSession.StereoOrientation {
+        return AVAudioSession.StereoOrientation(rawValue: rawValue)!
+    }
+}
+
+public enum StereoLayout: String {
+    
+    case none                    = "none"
+    case mono                    = "Mono"
+    case frontLandscapeLeft      = "Front LandscapeLeft"
+    case frontLandscapeRight     = "Front LandscapeRight"
+    case frontPortrait           = "Front Portrait"
+    case frontPortraitUpsideDown = "Front PortraitUpsideDown"
+    case backLandscapeLeft       = "Back LandscapeLeft"
+    case backLandscapeRight      = "Back LandscapeRight"
+    case backPortrait            = "Back Portrait"
+    case backPortraitUpsideDown  = "Back PortraitUpsideDown"
+    
+    init(orientation: AVAudioSession.Orientation, stereoOrientation: AVAudioSession.StereoOrientation) {
+        
+        let front: AVAudioSession.Orientation = .front
+        let back: AVAudioSession.Orientation = .back
+        
+        switch (orientation, stereoOrientation) {
+            
+            // Front
+            case (front, .none):
+                self.init(rawValue: StereoLayout.mono.rawValue)!
+                
+            case (front, .landscapeLeft):
+                self.init(rawValue: StereoLayout.frontLandscapeLeft.rawValue)!
+                
+            case (front, .landscapeRight):
+                self.init(rawValue: StereoLayout.frontLandscapeRight.rawValue)!
+                
+            case (front, .portrait):
+                self.init(rawValue: StereoLayout.frontPortrait.rawValue)!
+                
+            case (front, .portraitUpsideDown):
+                self.init(rawValue: StereoLayout.frontPortraitUpsideDown.rawValue)!
+                
+            // Back
+            case (back, .none):
+                self.init(rawValue: StereoLayout.mono.rawValue)!
+                
+            case (back, .landscapeLeft):
+                self.init(rawValue: StereoLayout.backLandscapeLeft.rawValue)!
+                
+            case (back, .landscapeRight):
+                self.init(rawValue: StereoLayout.backLandscapeRight.rawValue)!
+                
+            case (back, .portrait):
+                self.init(rawValue: StereoLayout.backPortrait.rawValue)!
+                
+            case (back, .portraitUpsideDown):
+                self.init(rawValue: StereoLayout.backPortraitUpsideDown.rawValue)!
+                
+            default:
+                self.init(rawValue: StereoLayout.none.rawValue)!
+        }
+    }
+}
+
+public struct RecordingOption: Comparable {
+    let name: String
+    fileprivate let dataSourceName: String
+    public static func < (lhs: RecordingOption, rhs: RecordingOption) -> Bool {
+        lhs.name < rhs.name
+    }
+    init(name: String, dataSourceName: String) {
+        self.name = name
+        self.dataSourceName = dataSourceName
+    }
+    
+    public static func frontStereo() -> RecordingOption {
+        return RecordingOption.init(name: "Front Stereo", dataSourceName: AVAudioSession.Orientation.front.rawValue)
+    }
+    
+    public static func backStereo() -> RecordingOption {
+        return RecordingOption.init(name: "Back Stereo", dataSourceName: AVAudioSession.Orientation.back.rawValue)
+    }
+    
+    public static func mono() -> RecordingOption {
+        return RecordingOption.init(name: "Mono", dataSourceName: AVAudioSession.Orientation.bottom.rawValue)
+    }
+}
+
 extension NextLevel {
+    
+    static var recordingOptions: [RecordingOption] = {
+        let front = AVAudioSession.Orientation.front
+        let back = AVAudioSession.Orientation.back
+        let bottom = AVAudioSession.Orientation.bottom
+
+        let session = AVAudioSession.sharedInstance()
+        guard let dataSources = session.preferredInput?.dataSources else { return [] }
+        
+        var options = [RecordingOption]()
+        dataSources.forEach { dataSource in
+            switch dataSource.orientation {
+                case front:
+                    options.append(RecordingOption(name: "Front Stereo", dataSourceName: front.rawValue))
+                case back:
+                    options.append(RecordingOption(name: "Back Stereo", dataSourceName: back.rawValue))
+                case bottom:
+                    options.append(RecordingOption(name: "Mono", dataSourceName: bottom.rawValue))
+                default: ()
+            }
+        }
+        // Sort alphabetically
+        options.sort()
+        return options
+    }()
+    
+    var isDeviceSupported: Bool {
+        return NextLevel.recordingOptions.count >= 3
+    }
+    
+    func setupAudioSession() {
+        do {
+            let session = AVAudioSession.sharedInstance()
+            try session.setCategory(.playAndRecord, options: [.defaultToSpeaker, .allowBluetoothHFP])
+            try session.setActive(true)
+        } catch {
+            log("Failed to configure and activate session.")
+        }
+    }
+    
+    private func enableBuiltInMic() {
+        // Get the shared audio session.
+        let session = AVAudioSession.sharedInstance()
+        
+        // Find the built-in microphone input.
+        guard let availableInputs = session.availableInputs,
+              let builtInMicInput = availableInputs.first(where: { $0.portType == .builtInMic }) else {
+            log("The device must have a built-in microphone.")
+            return
+        }
+        
+        // Make the built-in microphone input the preferred input.
+        do {
+            try session.setPreferredInput(builtInMicInput)
+        } catch {
+            log("Unable to set the built-in mic as the preferred input.")
+        }
+    }
+    
+    public func reloadAudioChannelSetting() {
+        guard isRecording == false else {
+            return
+        }
+        let option: RecordingOption = devicePosition == .front ? RecordingOption.frontStereo() : RecordingOption.backStereo()
+        selectRecordingOption(option, orientation: stereoOrientation) { layout in
+            log("layout:\(layout)")
+        }
+    }
+    
+    public func selectRecordingOption(_ option: RecordingOption, orientation: Orientation, completion: (StereoLayout) -> Void) {
+        
+        // Get the shared audio session.
+        let session = AVAudioSession.sharedInstance()
+        
+        // Find the built-in microphone input's data sources,
+        // and select the one that matches the specified name.
+        guard let preferredInput = session.preferredInput,
+              let dataSources = preferredInput.dataSources,
+              let newDataSource = dataSources.first(where: { $0.dataSourceName == option.dataSourceName }),
+              let supportedPolarPatterns = newDataSource.supportedPolarPatterns else {
+            completion(.none)
+            return
+        }
+        
+        do {
+            let isStereoSupported = supportedPolarPatterns.contains(.stereo)
+            // If the data source supports stereo, set it as the preferred polar pattern.
+            if isStereoSupported {
+                // Set the preferred polar pattern to stereo.
+                try newDataSource.setPreferredPolarPattern(.stereo)
+            }
+
+            // Set the preferred data source and polar pattern.
+            try preferredInput.setPreferredDataSource(newDataSource)
+            
+            // Update the input orientation to match the current user interface orientation.
+            try session.setPreferredInputOrientation(orientation.inputOrientation)
+
+        } catch {
+            log("Unable to select the \(option.dataSourceName) data source.")
+        }
+        
+        // Call the completion handler with the updated stereo layout.
+        completion(StereoLayout(orientation: newDataSource.orientation!,
+                                stereoOrientation: session.inputOrientation))
+    }
 
     /// Starts the current recording session.
     ///
@@ -705,11 +922,14 @@ extension NextLevel {
         default:
             self.executeClosureAsyncOnSessionQueueIfNecessary {
                 guard self._captureSession == nil else {
-                    self.log("---> guard self._captureSession == nil")
+                    self.log("---> guard self._captureSession != nil")
                     return
                 }
-                self.log("---> guard self._captureSession != nil")
+                self.log("---> guard self._captureSession == nil")
                 self.isSessionPause = false
+                self.setupAudioSession()
+                self.enableBuiltInMic()
+                self.reloadAudioChannelSetting()
                 self.setupAVSession()
             }
         }
@@ -738,7 +958,7 @@ extension NextLevel {
 
     /// Stops the current recording session.
     public func stop() {
-        self.executeClosureAsyncOnSessionQueueIfNecessary {
+        self.executeClosureSyncOnSessionQueueIfNecessary {
             if let session = self._captureSession {
                 if session.isRunning == true {
                     session.stopRunning()
@@ -747,6 +967,7 @@ extension NextLevel {
                 self.beginConfiguration()
                 self.removeInputs(session: session)
                 self.removeOutputs(session: session)
+                self.previewLayer?.session = nil
                 self.commitConfiguration()
                 self._recordingSession = nil
                 self._captureSession = nil
@@ -1005,7 +1226,9 @@ extension NextLevel {
             }
 
             _ = self.addPhotoOutput()
-            _ = self.addVideoOutput()
+            if previewLayer == nil {
+                _ = self.addVideoOutput()
+            }
             #if USE_TRUE_DEPTH
             if self.depthDataCaptureEnabled {
                 _ = self.addDepthDataOutput()
@@ -1157,34 +1380,37 @@ extension NextLevel {
         if self._videoOutput == nil {
             self._videoOutput = AVCaptureVideoDataOutput()
             self._videoOutput?.alwaysDiscardsLateVideoFrames = false
-
-            var videoSettings = [String(kCVPixelBufferPixelFormatTypeKey): Int(kCVPixelFormatType_32BGRA)]
-            #if !( targetEnvironment(simulator) )
-                if let formatTypes = self._videoOutput?.availableVideoPixelFormatTypes {
-                    var supportsFullRange = false
-                    var supportsVideoRange = false
-                    var supportsBGRA = false
-                    for format in formatTypes {
-                        if format == Int(kCVPixelFormatType_32BGRA) {
-                            supportsBGRA = true
+            if previewLayer != nil {
+                self._videoOutput?.videoSettings = nil
+            } else {
+                var videoSettings = [String(kCVPixelBufferPixelFormatTypeKey): Int(kCVPixelFormatType_32BGRA)]
+                #if !( targetEnvironment(simulator) )
+                    if let formatTypes = self._videoOutput?.availableVideoPixelFormatTypes {
+                        var supportsFullRange = false
+                        var supportsVideoRange = false
+                        var supportsBGRA = false
+                        for format in formatTypes {
+                            if format == Int(kCVPixelFormatType_32BGRA) {
+                                supportsBGRA = true
+                            }
+                            if format == Int(kCVPixelFormatType_420YpCbCr8BiPlanarFullRange) {
+                                supportsFullRange = true
+                            }
+                            if format == Int(kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange) {
+                                supportsVideoRange = true
+                            }
                         }
-                        if format == Int(kCVPixelFormatType_420YpCbCr8BiPlanarFullRange) {
-                            supportsFullRange = true
-                        }
-                        if format == Int(kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange) {
-                            supportsVideoRange = true
+                        if supportsBGRA {
+                            videoSettings[String(kCVPixelBufferPixelFormatTypeKey)] = Int(kCVPixelFormatType_32BGRA)
+                        } else if supportsFullRange {
+                            videoSettings[String(kCVPixelBufferPixelFormatTypeKey)] = Int(kCVPixelFormatType_420YpCbCr8BiPlanarFullRange)
+                        } else if supportsVideoRange {
+                            videoSettings[String(kCVPixelBufferPixelFormatTypeKey)] = Int(kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange)
                         }
                     }
-                    if supportsBGRA {
-                        videoSettings[String(kCVPixelBufferPixelFormatTypeKey)] = Int(kCVPixelFormatType_32BGRA)
-                    } else if supportsFullRange {
-                        videoSettings[String(kCVPixelBufferPixelFormatTypeKey)] = Int(kCVPixelFormatType_420YpCbCr8BiPlanarFullRange)
-                    } else if supportsVideoRange {
-                        videoSettings[String(kCVPixelBufferPixelFormatTypeKey)] = Int(kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange)
-                    }
-                }
-            #endif
-            self._videoOutput?.videoSettings = videoSettings
+                #endif
+                self._videoOutput?.videoSettings = videoSettings
+            }
         }
 
         if let session = self._captureSession, let videoOutput = self._videoOutput {
@@ -1563,6 +1789,11 @@ extension NextLevel {
                 if let videoConnection = videoOutput.connection(with: AVMediaType.video) {
                     if videoConnection.isVideoStabilizationSupported {
                         videoConnection.preferredVideoStabilizationMode = self.videoStabilizationMode
+                    }
+                }
+                if let previewLayer, let connection = previewLayer.connection {
+                    if connection.isVideoStabilizationSupported {
+                        connection.preferredVideoStabilizationMode = self.videoStabilizationMode
                     }
                 }
             }
@@ -3341,11 +3572,11 @@ extension NextLevel: AVCaptureMetadataOutputObjectsDelegate {
 
 extension NextLevel {
 
-    internal func executeClosureAsyncOnSessionQueueIfNecessary(withClosure closure: @escaping () -> Void) {
+    public func executeClosureAsyncOnSessionQueueIfNecessary(withClosure closure: @escaping () -> Void) {
         self._sessionQueue.async(execute: closure)
     }
 
-    internal func executeClosureSyncOnSessionQueueIfNecessary(withClosure closure: @escaping () -> Void) {
+    public func executeClosureSyncOnSessionQueueIfNecessary(withClosure closure: @escaping () -> Void) {
         if DispatchQueue.getSpecific(key: NextLevelCaptureSessionQueueSpecificKey) != nil {
             closure()
         } else {
@@ -3753,21 +3984,14 @@ extension NextLevel {
         }
         return videoPresets
     }
-    public func setVideoPreset(_ preset: VideoPreset, completion:((VideoPreset?)->Void)?) {
+    public func setVideoPreset(_ preset: VideoPreset, enableHDR: Bool, completion:((VideoPreset?, Bool)->Void)?) {
         self.executeClosureAsyncOnSessionQueueIfNecessary { [weak self] in
             var resultPreset: VideoPreset? = nil
             guard let self, let currentDevice = self.currentDevice else {
-                completion?(nil)
+                completion?(nil, enableHDR)
                 return
             }
-            var format_r1080P_f30_fullRange: AVCaptureDevice.Format?
-            var format_r1080P_f30_videoRange: AVCaptureDevice.Format?
-            var format_r1080P_f60_fullRange: AVCaptureDevice.Format?
-            var format_r1080P_f60_videoRange: AVCaptureDevice.Format?
-            var format_r4K_f30_fullRange: AVCaptureDevice.Format?
-            var format_r4K_f30_videoRange: AVCaptureDevice.Format?
-            var format_r4K_f60_fullRange: AVCaptureDevice.Format?
-            var format_r4K_f60_videoRange: AVCaptureDevice.Format?
+            var formatDict: [String: AVCaptureDevice.Format] = [:]
             //print("formatType:\(kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange),\(kCVPixelFormatType_420YpCbCr8BiPlanarFullRange)")
 //            let dict: [OSType: String] = [
 //                kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange: "videoRange",
@@ -3782,17 +4006,27 @@ extension NextLevel {
                     let ranges = format.videoSupportedFrameRateRanges
                     for range in ranges {
                         if range.maxFrameRate == 30 {
+                            if subType == kCVPixelFormatType_420YpCbCr10BiPlanarFullRange {
+                                formatDict["format_r1080P_f30_fullRange_hdr"] = format
+                            } else if subType == kCVPixelFormatType_420YpCbCr10BiPlanarVideoRange {
+                                formatDict["format_r1080P_f30_videoRange_hdr"] = format
+                            }
                             if subType == kCVPixelFormatType_420YpCbCr8BiPlanarFullRange {
-                                format_r1080P_f30_fullRange = format
+                                formatDict["format_r1080P_f30_fullRange"] = format
                             } else if subType == kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange {
-                                format_r1080P_f30_videoRange = format
+                                formatDict["format_r1080P_f30_videoRange"] = format
                             }
                             //print("format:\(format) -> \(dict[subType] ?? "unknow")")
                         } else if range.maxFrameRate == 60 {
+                            if subType == kCVPixelFormatType_420YpCbCr10BiPlanarFullRange {
+                                formatDict["format_r1080P_f60_fullRange_hdr"] = format
+                            } else if subType == kCVPixelFormatType_420YpCbCr10BiPlanarVideoRange {
+                                formatDict["format_r1080P_f60_videoRange_hdr"] = format
+                            }
                             if subType == kCVPixelFormatType_420YpCbCr8BiPlanarFullRange {
-                                format_r1080P_f60_fullRange = format
+                                formatDict["format_r1080P_f60_fullRange"] = format
                             } else if subType == kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange {
-                                format_r1080P_f60_videoRange = format
+                                formatDict["format_r1080P_f60_videoRange"] = format
                             }
                             //print("format:\(format) -> \(dict[subType] ?? "unknow")")
                         }
@@ -3802,17 +4036,27 @@ extension NextLevel {
                     let ranges = format.videoSupportedFrameRateRanges
                     for range in ranges {
                         if range.maxFrameRate == 30 {
+                            if subType == kCVPixelFormatType_420YpCbCr10BiPlanarFullRange {
+                                formatDict["format_r4K_f30_fullRange_hdr"] = format
+                            } else if subType == kCVPixelFormatType_420YpCbCr10BiPlanarVideoRange {
+                                formatDict["format_r4K_f30_videoRange_hdr"] = format
+                            }
                             if subType == kCVPixelFormatType_420YpCbCr8BiPlanarFullRange {
-                                format_r4K_f30_fullRange = format
+                                formatDict["format_r4K_f30_fullRange"] = format
                             } else if subType == kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange {
-                                format_r4K_f30_videoRange = format
+                                formatDict["format_r4K_f30_videoRange"] = format
                             }
                             //print("format:\(format) -> \(dict[subType] ?? "unknow")")
                         } else if range.maxFrameRate == 60 {
+                            if subType == kCVPixelFormatType_420YpCbCr10BiPlanarFullRange {
+                                formatDict["format_r4K_f60_fullRange_hdr"] = format
+                            } else if subType == kCVPixelFormatType_420YpCbCr10BiPlanarVideoRange {
+                                formatDict["format_r4K_f60_videoRange_hdr"] = format
+                            }
                             if subType == kCVPixelFormatType_420YpCbCr8BiPlanarFullRange {
-                                format_r4K_f60_fullRange = format
+                                formatDict["format_r4K_f60_fullRange"] = format
                             } else if subType == kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange {
-                                format_r4K_f60_videoRange = format
+                                formatDict["format_r4K_f60_videoRange"] = format
                             }
                             //print("format:\(format) -> \(dict[subType] ?? "unknow")")
                         }
@@ -3822,111 +4066,168 @@ extension NextLevel {
             var activeFormat: AVCaptureDevice.Format?
             var fps: Int = 30
             var debugString = ""
+            var isHDREnabled: Bool = enableHDR
             switch preset {
             case .r1080P_f30:
-                if let format = format_r1080P_f30_fullRange {
+                if let format = formatDict["format_r1080P_f30_fullRange"] {
                     activeFormat = format
-                } else if let format = format_r1080P_f30_videoRange {
+                } else if let format = formatDict["format_r1080P_f30_videoRange"] {
                     activeFormat = format
+                }
+                if enableHDR {
+                    if let format = formatDict["format_r1080P_f30_fullRange_hdr"] {
+                        activeFormat = format
+                    } else if let format = formatDict["format_r1080P_f30_videoRange_hdr"] {
+                        activeFormat = format
+                    } else {
+                        isHDREnabled = false
+                    }
                 }
                 fps = 30
                 debugString = "1080P"
                 resultPreset = .r1080P_f30
             case .r1080P_f60:
-                if let format = format_r1080P_f60_fullRange {
+                if let format = formatDict["format_r1080P_f60_fullRange"] {
                     activeFormat = format
                     fps = 60
                     debugString = "1080P"
                     resultPreset = .r1080P_f60
-                } else if let format = format_r1080P_f60_videoRange {
+                } else if let format = formatDict["format_r1080P_f60_videoRange"] {
                     activeFormat = format
                     fps = 60
                     debugString = "1080P"
                     resultPreset = .r1080P_f60
-                } else if let format = format_r1080P_f30_fullRange {
+                } else if let format = formatDict["format_r1080P_f30_fullRange"] {
                     activeFormat = format
                     fps = 30
                     debugString = "1080P"
                     resultPreset = .r1080P_f30
-                } else if let format = format_r1080P_f30_videoRange {
+                } else if let format = formatDict["format_r1080P_f30_videoRange"] {
                     activeFormat = format
                     fps = 30
                     debugString = "1080P"
                     resultPreset = .r1080P_f30
+                }
+                if enableHDR {
+                    if let format = formatDict["format_r1080P_f60_fullRange_hdr"] {
+                        activeFormat = format
+                    } else if let format = formatDict["format_r1080P_f60_videoRange_hdr"] {
+                        activeFormat = format
+                    } else if let format = formatDict["format_r1080P_f30_fullRange_hdr"] {
+                        activeFormat = format
+                    } else if let format = formatDict["format_r1080P_f30_videoRange_hdr"] {
+                        activeFormat = format
+                    } else {
+                        isHDREnabled = false
+                    }
                 }
             case .r4K_f30:
-                if let format = format_r4K_f30_fullRange {
+                if let format = formatDict["format_r4K_f30_fullRange"] {
                     activeFormat = format
                     fps = 30
                     debugString = "4K"
                     resultPreset = .r4K_f30
-                } else if let format = format_r4K_f30_videoRange {
+                } else if let format = formatDict["format_r4K_f30_videoRange"] {
                     activeFormat = format
                     fps = 30
                     debugString = "4K"
                     resultPreset = .r4K_f30
-                } else if let format = format_r1080P_f30_fullRange {
+                } else if let format = formatDict["format_r1080P_f30_fullRange"] {
                     activeFormat = format
                     fps = 30
                     debugString = "1080P"
                     resultPreset = .r1080P_f30
-                } else if let format = format_r1080P_f30_videoRange {
+                } else if let format = formatDict["format_r1080P_f30_videoRange"] {
                     activeFormat = format
                     fps = 30
                     debugString = "1080P"
                     resultPreset = .r1080P_f30
                 }
+                if enableHDR {
+                    if let format = formatDict["format_r4K_f30_fullRange_hdr"] {
+                        activeFormat = format
+                    } else if let format = formatDict["format_r4K_f30_videoRange_hdr"] {
+                        activeFormat = format
+                    } else if let format = formatDict["format_r1080P_f30_fullRange_hdr"] {
+                        activeFormat = format
+                    } else if let format = formatDict["format_r1080P_f30_videoRange_hdr"] {
+                        activeFormat = format
+                    } else {
+                        isHDREnabled = false
+                    }
+                }
             case .r4K_f60:
-                if let format = format_r4K_f60_fullRange {
+                if let format = formatDict["format_r4K_f60_fullRange"] {
                     activeFormat = format
                     fps = 60
                     debugString = "4K"
                     resultPreset = .r4K_f60
-                } else if let format = format_r4K_f60_videoRange {
+                } else if let format = formatDict["format_r4K_f60_videoRange"] {
                     activeFormat = format
                     fps = 60
                     debugString = "4K"
                     resultPreset = .r4K_f60
-                } else if let format = format_r4K_f30_fullRange {
+                } else if let format = formatDict["format_r4K_f30_fullRange"] {
                     activeFormat = format
                     fps = 30
                     debugString = "4K"
                     resultPreset = .r4K_f30
-                } else if let format = format_r4K_f30_videoRange {
+                } else if let format = formatDict["format_r4K_f30_videoRange"] {
                     activeFormat = format
                     fps = 30
                     debugString = "4K"
                     resultPreset = .r4K_f30
-                } else if let format = format_r1080P_f60_fullRange {
+                } else if let format = formatDict["format_r1080P_f60_fullRange"] {
                     activeFormat = format
                     fps = 60
                     debugString = "1080P"
                     resultPreset = .r1080P_f60
-                } else if let format = format_r1080P_f60_videoRange {
+                } else if let format = formatDict["format_r1080P_f60_videoRange"] {
                     activeFormat = format
                     fps = 60
                     debugString = "1080P"
                     resultPreset = .r1080P_f60
-                } else if let format = format_r1080P_f30_fullRange {
+                } else if let format = formatDict["format_r1080P_f30_fullRange"] {
                     activeFormat = format
                     fps = 30
                     debugString = "1080P"
                     resultPreset = .r1080P_f30
-                } else if let format = format_r1080P_f30_videoRange {
+                } else if let format = formatDict["format_r1080P_f30_videoRange"] {
                     activeFormat = format
                     fps = 30
                     debugString = "1080P"
                     resultPreset = .r1080P_f30
+                }
+                if enableHDR {
+                    if let format = formatDict["format_r4K_f60_fullRange_hdr"] {
+                        activeFormat = format
+                    } else if let format = formatDict["format_r4K_f60_videoRange_hdr"] {
+                        activeFormat = format
+                    } else if let format = formatDict["format_r4K_f30_fullRange_hdr"] {
+                        activeFormat = format
+                    } else if let format = formatDict["format_r4K_f30_videoRange_hdr"] {
+                        activeFormat = format
+                    } else if let format = formatDict["format_r1080P_f60_fullRange_hdr"] {
+                        activeFormat = format
+                    } else if let format = formatDict["format_r1080P_f60_videoRange_hdr"] {
+                        activeFormat = format
+                    } else if let format = formatDict["format_r1080P_f30_fullRange_hdr"] {
+                        activeFormat = format
+                    } else if let format = formatDict["format_r1080P_f30_videoRange_hdr"] {
+                        activeFormat = format
+                    } else {
+                        isHDREnabled = false
+                    }
                 }
             }
             guard let activeFormat else {
                 self.log("设置失败:activeFormat = nil")
-                completion?(nil)
+                completion?(nil, false)
                 return
             }
             guard activeFormat != currentDevice.activeFormat else {
                 self.log("activeFormat == currentDevice.activeFormat")
-                completion?(nil)
+                completion?(resultPreset, isHDREnabled)
                 return
             }
             captureSession?.stopRunning()
@@ -3938,13 +4239,27 @@ extension NextLevel {
                     currentDevice.activeVideoMinFrameDuration = frameRate.minFrameDuration
                     currentDevice.activeVideoMaxFrameDuration = frameRate.minFrameDuration
                 }
-                
+                if #available(iOS 14.1, *) {
+                    if isHDREnabled {
+                        if activeFormat.supportedColorSpaces.contains(.HLG_BT2020) {
+                            currentDevice.activeColorSpace = .HLG_BT2020
+                        }
+                    } else {
+                        if activeFormat.supportedColorSpaces.contains(.P3_D65) {
+                            currentDevice.activeColorSpace = .P3_D65
+                        }
+                    }
+                } else {
+                    if activeFormat.supportedColorSpaces.contains(.P3_D65) {
+                        currentDevice.activeColorSpace = .P3_D65
+                    }
+                }
                 currentDevice.unlockForConfiguration()
-                self.log("成功切换至: \(debugString) @ \(fps)fps format:\(currentDevice.activeFormat)")
-                completion?(resultPreset)
+                self.log("成功切换至: \(debugString) @ \(fps)fps format:\(currentDevice.activeFormat), isHDREnabled:\(isHDREnabled)")
+                completion?(resultPreset, isHDREnabled)
             } catch {
                 self.log("锁定设备失败: \(error)")
-                completion?(nil)
+                completion?(nil, false)
             }
             captureSession?.startRunning()
         }

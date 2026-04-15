@@ -341,3 +341,23 @@ extension OSType {
         return s
     }
 }
+
+
+extension AVCaptureDevice {
+    public var activeFormat10BitVariant: AVCaptureDevice.Format? {
+        formats.filter {
+            $0.maxFrameRate == activeFormat.maxFrameRate &&
+            $0.formatDescription.dimensions == activeFormat.formatDescription.dimensions
+        }
+        .first(where: { $0.isTenBitFormat })
+    }
+}
+
+extension AVCaptureDevice.Format {
+    public var isTenBitFormat: Bool {
+        formatDescription.mediaSubType.rawValue == kCVPixelFormatType_420YpCbCr10BiPlanarVideoRange
+    }
+    public var maxFrameRate: Double {
+        videoSupportedFrameRateRanges.last?.maxFrameRate ?? 0
+    }
+}
