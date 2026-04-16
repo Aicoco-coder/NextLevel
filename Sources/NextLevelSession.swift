@@ -747,6 +747,9 @@ extension NextLevelSession {
                     self.removeFile(fileUrl: exportURL)
 
                     if let exportSession = AVAssetExportSession(asset: exportAsset, presetName: preset) {
+                        if let firstAsset = self._clips.first?.asset {
+                            exportSession.metadata = firstAsset.metadata
+                        }
                         exportSession.shouldOptimizeForNetworkUse = true
                         exportSession.outputURL = exportURL
                         exportSession.outputFileType = self.fileType
