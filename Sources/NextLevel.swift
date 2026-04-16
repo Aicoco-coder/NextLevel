@@ -298,14 +298,14 @@ public class NextLevel: NSObject {
     public var captureMode: NextLevelCaptureMode = .video
     
     public func switchCaptureMode(_ mode: NextLevelCaptureMode) {
-        
-        guard self.isRunning else {
-            return
-        }
         guard self.captureMode != mode else {
             return
         }
         self.captureMode = mode
+        
+        guard self.isRunning else {
+            return
+        }
 
         self.delegate?.nextLevelCaptureModeWillChange(self)
 
@@ -2975,7 +2975,8 @@ extension NextLevel {
                     }
                 }
                 if session.clips.count > 1 {
-                    session.mergeClips(usingPreset: AVAssetExportPresetHighestQuality, completionHandler: { [weak self] (url: URL?, error: Error?) in
+                    let preset = self.isSupportedHevc ? AVAssetExportPresetHEVCHighestQuality : AVAssetExportPresetHighestQuality
+                    session.mergeClips(usingPreset: preset, completionHandler: { [weak self] (url: URL?, error: Error?) in
                         if let url = url {
                             renameAndCompletion(url)
                         } else if let error = error {
