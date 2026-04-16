@@ -1723,7 +1723,11 @@ extension NextLevel {
     public func flipCaptureDevicePosition() {
         self.devicePosition = self.devicePosition == .back ? .front : .back
     }
-
+    public func setRequestedDevice(_ device: AVCaptureDevice?) {
+        self.executeClosureSyncOnSessionQueueIfNecessary {
+            self._requestedDevice = device
+        }
+    }
     /// Changes capture device if the desired device is available.
     public func changeCaptureDeviceIfAvailable(captureDevice: NextLevelDeviceType) throws {
         log("changeCaptureDeviceIfAvailable:\(captureDevice.description)")
