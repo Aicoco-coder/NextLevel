@@ -1509,7 +1509,7 @@ extension NextLevel {
         if self._movieFileOutput == nil {
             self._movieFileOutput = AVCaptureMovieFileOutput()
         }
-
+        /*
         // TODO configuration
         guard let movieFileOutputConnection = self._movieFileOutput?.connection(with: .video) else {
             self._movieFileOutput = nil
@@ -1524,7 +1524,7 @@ extension NextLevel {
             videoSettings[AVVideoCodecKey] = self.videoConfiguration.codec
         }
         self._movieFileOutput?.setOutputSettings(videoSettings, for: movieFileOutputConnection)
-
+         */
         if let session = self._captureSession, let movieOutput = self._movieFileOutput {
             if session.canAddOutput(movieOutput) {
                 session.addOutput(movieOutput)
@@ -1534,6 +1534,17 @@ extension NextLevel {
         log("NextLevel, couldn't add movie output to session")
         return false
 
+    }
+    
+    func remove(output: AVCaptureOutput) -> Bool {
+        guard let session = captureSession else {
+            return false
+        }
+        if session.outputs.contains(output) {
+            session.removeOutput(output)
+            return true
+        }
+        return false
     }
 
     #if USE_TRUE_DEPTH
@@ -4265,6 +4276,20 @@ extension NextLevel {
             } catch {
                 self.log("锁定设备失败: \(error)")
                 completion?(nil, false)
+            }
+            if isHDREnabled {
+                if self._movieFileOutput == nil {
+                    //添加AVCaptureMovieFileOutput会使预览画面的HDR效果更亮，更接近系统相机，如果不加对比度和亮度都比较低
+                    if !self.addMovieOutput() {
+                        self._movieFileOutput = nil
+                    }
+                }
+            } else {
+                if let movieOutput = self._movieFileOutput {
+                    if self.remove(output: movieOutput) {
+                        self._movieFileOutput = nil
+                    }
+                }
             }
             captureSession?.startRunning()
         }
