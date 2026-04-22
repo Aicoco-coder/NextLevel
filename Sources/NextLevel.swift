@@ -290,7 +290,7 @@ public class NextLevel: NSObject {
     // audio configuration
 
     /// Indicates whether the capture session automatically changes settings in the app’s shared audio session. By default, is `true`.
-    public var automaticallyConfiguresApplicationAudioSession: Bool = false
+    public var automaticallyConfiguresApplicationAudioSession: Bool = true
 
     // camera configuration
 
@@ -775,25 +775,27 @@ public enum StereoLayout: String {
 
 public struct RecordingOption: Comparable {
     let name: String
+    let orientation: AVAudioSession.Orientation
     fileprivate let dataSourceName: String
     public static func < (lhs: RecordingOption, rhs: RecordingOption) -> Bool {
         lhs.name < rhs.name
     }
-    init(name: String, dataSourceName: String) {
+    init(name: String, orientation: AVAudioSession.Orientation) {
         self.name = name
-        self.dataSourceName = dataSourceName
+        self.orientation = orientation
+        self.dataSourceName = orientation.rawValue
     }
     
     public static func frontStereo() -> RecordingOption {
-        return RecordingOption.init(name: "Front Stereo", dataSourceName: AVAudioSession.Orientation.front.rawValue)
+        return RecordingOption.init(name: "Front Stereo", orientation: .front)
     }
     
     public static func backStereo() -> RecordingOption {
-        return RecordingOption.init(name: "Back Stereo", dataSourceName: AVAudioSession.Orientation.back.rawValue)
+        return RecordingOption.init(name: "Back Stereo", orientation: .back)
     }
     
     public static func mono() -> RecordingOption {
-        return RecordingOption.init(name: "Mono", dataSourceName: AVAudioSession.Orientation.bottom.rawValue)
+        return RecordingOption.init(name: "Mono", orientation: .bottom)
     }
 }
 
@@ -811,11 +813,11 @@ extension NextLevel {
         dataSources.forEach { dataSource in
             switch dataSource.orientation {
                 case front:
-                    options.append(RecordingOption(name: "Front Stereo", dataSourceName: front.rawValue))
+                    options.append(RecordingOption(name: "Front Stereo", orientation: front))
                 case back:
-                    options.append(RecordingOption(name: "Back Stereo", dataSourceName: back.rawValue))
+                    options.append(RecordingOption(name: "Back Stereo", orientation: back))
                 case bottom:
-                    options.append(RecordingOption(name: "Mono", dataSourceName: bottom.rawValue))
+                    options.append(RecordingOption(name: "Mono", orientation: bottom))
                 default: ()
             }
         }
@@ -864,6 +866,7 @@ extension NextLevel {
         let option: RecordingOption = devicePosition == .front ? RecordingOption.frontStereo() : RecordingOption.backStereo()
         selectRecordingOption(option, orientation: stereoOrientation) { layout in
             log("layout:\(layout)")
+            self.automaticallyConfiguresApplicationAudioSession = layout == .none
         }
     }
     
@@ -876,7 +879,7 @@ extension NextLevel {
         // and select the one that matches the specified name.
         guard let preferredInput = session.preferredInput,
               let dataSources = preferredInput.dataSources,
-              let newDataSource = dataSources.first(where: { $0.dataSourceName == option.dataSourceName }),
+              let newDataSource = dataSources.first(where: { $0.orientation == option.orientation }),
               let supportedPolarPatterns = newDataSource.supportedPolarPatterns else {
             completion(.none)
             return
@@ -958,12 +961,11 @@ extension NextLevel {
 
     /// Stops the current recording session.
     public func stop() {
-        self.executeClosureSyncOnSessionQueueIfNecessary {
+        self.executeClosureAsyncOnSessionQueueIfNecessary {
             if let session = self._captureSession {
                 if session.isRunning == true {
                     session.stopRunning()
                 }
-
                 self.beginConfiguration()
                 self.removeInputs(session: session)
                 self.removeOutputs(session: session)
@@ -1735,7 +1737,7 @@ extension NextLevel {
         self.devicePosition = self.devicePosition == .back ? .front : .back
     }
     public func setRequestedDevice(_ device: AVCaptureDevice?) {
-        self.executeClosureSyncOnSessionQueueIfNecessary {
+        self.executeClosureAsyncOnSessionQueueIfNecessary {
             self._requestedDevice = device
         }
     }
@@ -4246,7 +4248,7 @@ extension NextLevel {
                 completion?(resultPreset, isHDREnabled)
                 return
             }
-            captureSession?.stopRunning()
+            self.beginConfiguration()
             do {
                 try currentDevice.lockForConfiguration()
                 
@@ -4291,7 +4293,7 @@ extension NextLevel {
                     }
                 }
             }
-            captureSession?.startRunning()
+            self.commitConfiguration()
         }
     }
 }
