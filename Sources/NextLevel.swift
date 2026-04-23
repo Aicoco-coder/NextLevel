@@ -3670,7 +3670,8 @@ extension NextLevel {
                 switch error.code {
                 case .deviceIsNotAvailableInBackground:
                     self.log("NextLevel, error, media services are not available in the background")
-                case .mediaServicesWereReset:
+                //case .mediaServicesWereReset:
+                default:
                     self.log("NextLevel, error, mediaServicesWereReset")
                     var applicationState: UIApplication.State?
                     if Thread.isMainThread {
@@ -3690,9 +3691,6 @@ extension NextLevel {
                             }
                         }
                     }
-                default:
-                    // TODO reset capture
-                    break
                 }
             }
         }
