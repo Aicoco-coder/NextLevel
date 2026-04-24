@@ -573,8 +573,8 @@ public class NextLevel: NSObject {
     // MARK: - object lifecycle
 
     override public init() {
-        self.previewLayer = AVCaptureVideoPreviewLayer()
-        self.previewLayer?.videoGravity = AVLayerVideoGravity.resizeAspectFill
+        //self.previewLayer = AVCaptureVideoPreviewLayer()
+        //self.previewLayer?.videoGravity = AVLayerVideoGravity.resizeAspectFill
 
         self._sessionQueue = DispatchQueue(label: NextLevelCaptureSessionQueueIdentifier, qos: .userInteractive, target: DispatchQueue.global())
         self._sessionVideoQueue = DispatchQueue(label: NextLevelCaptureSessionVideoQueueIdentifier, qos: .userInitiated, target: DispatchQueue.global())
@@ -969,7 +969,6 @@ extension NextLevel {
                 self.beginConfiguration()
                 self.removeInputs(session: session)
                 self.removeOutputs(session: session)
-                self.previewLayer?.session = nil
                 self.commitConfiguration()
                 self._recordingSession = nil
                 self._captureSession = nil
