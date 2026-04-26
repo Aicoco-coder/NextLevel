@@ -2961,9 +2961,12 @@ extension NextLevel {
                     Thread.sleep(forTimeInterval: 0.1) // 100ms
                     count += 1
                 }
+                self.log("wait time:\(Float(count) * 0.1 * 1000)ms")
                 self.executeClosureSyncOnSessionQueueIfNecessary {
                     self.beginRecordingNewClipIfNecessary()
                 }
+            } else {
+                self.log("_recordingSession == nil")
             }
         }
     }
@@ -3683,10 +3686,27 @@ extension NextLevel {
                     if self.isSessionPause == false, applicationState == .active {
                         if self.recoverSessionTryCount < 1 {
                             self.recoverSessionTryCount += 1
-                            NextLevel.shared.pauseSession(true)
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+                            let isRecordingMovie = self.isRecording
+                            let requestDevice = self.currentDevice
+                            if isRecordingMovie {
+                                NextLevel.shared.stopRecord(with: "tmpfile.mov") { url, error in
+                                    self.log("stopRecord with tmpfile.mov, error:\(String(describing: error))")
+                                    NextLevel.shared.stop()
+                                }
+                            } else {
+                                NextLevel.shared.stop()
+                            }
+                            self._sessionQueue.asyncAfter(deadline: .now() + 1) {
                                 self.log("NextLevel error: mediaServicesWereReset, try recover session, try count:\(self.recoverSessionTryCount)")
-                                NextLevel.shared.pauseSession(false)
+                                do {
+                                    self._requestedDevice = requestDevice
+                                    try NextLevel.shared.start()
+                                    if isRecordingMovie {
+                                        NextLevel.shared.record()
+                                    }
+                                } catch {
+                                    self.log("try start error:\(error)")
+                                }
                             }
                         }
                     }
