@@ -267,7 +267,7 @@ public class NextLevel: NSObject {
     // preview
 
     /// Live camera preview, add as a sublayer to the UIView's primary layer.
-    public var previewLayer: AVCaptureVideoPreviewLayer?
+    public private(set) var previewLayer: AVCaptureVideoPreviewLayer?
 
     // capture configuration
 
@@ -906,6 +906,53 @@ extension NextLevel {
         // Call the completion handler with the updated stereo layout.
         completion(StereoLayout(orientation: newDataSource.orientation!,
                                 stereoOrientation: session.inputOrientation))
+    }
+    
+    public func setPreviewLayer(_ previewLayer: AVCaptureVideoPreviewLayer?) {
+        executeClosureAsyncOnSessionQueueIfNecessary {
+            if let session = self._captureSession, session.isRunning {
+                if previewLayer != nil {
+                    if self.previewLayer != nil {
+                        self.previewLayer?.session = nil
+                        previewLayer?.session = session
+                        self.previewLayer = previewLayer
+                    } else {
+                        previewLayer?.session = session
+                        self.previewLayer = previewLayer
+                        self.commitConfiguration()
+                        if self.captureMode == .photo {
+                            if let movieOutput = self._movieFileOutput, session.outputs.contains(movieOutput) {
+                                session.removeOutput(movieOutput)
+                                self._movieFileOutput = nil
+                            }
+                            if let videoOutput = self._videoOutput, session.outputs.contains(videoOutput) {
+                                session.removeOutput(videoOutput)
+                                self._videoOutput = nil
+                            }
+                        } else if self.captureMode == .video || self.captureMode == .videoWithoutAudio {
+                            if self._videoOutput == nil {
+                                _ = self.addVideoOutput()
+                            }
+                        }
+                        self.beginConfiguration()
+                    }
+                } else {
+                    self.previewLayer?.session = nil
+                    self.previewLayer = nil
+                    self.beginConfiguration()
+                    if self._videoOutput == nil {
+                        _ = self.addVideoOutput()
+                    }
+                    if let movieOutput = self._movieFileOutput, session.outputs.contains(movieOutput) {
+                        session.removeOutput(movieOutput)
+                        self._movieFileOutput = nil
+                    }
+                    self.commitConfiguration()
+                }
+            } else {
+                self.previewLayer = previewLayer
+            }
+        }
     }
 
     /// Starts the current recording session.
@@ -1630,6 +1677,10 @@ extension NextLevel {
             }
             break
         case .photo:
+            if let movieOutput = self._movieFileOutput, session.outputs.contains(movieOutput) {
+                session.removeOutput(movieOutput)
+                self._movieFileOutput = nil
+            }
             if let videoOutput = self._videoOutput, session.outputs.contains(videoOutput) {
                 session.removeOutput(videoOutput)
                 self._videoOutput = nil
