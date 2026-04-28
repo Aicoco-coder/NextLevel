@@ -907,8 +907,14 @@ extension NextLevel {
         completion(StereoLayout(orientation: newDataSource.orientation!,
                                 stereoOrientation: session.inputOrientation))
     }
-    
     public func setPreviewLayer(_ previewLayer: AVCaptureVideoPreviewLayer?) {
+        executeClosureAsyncOnSessionQueueIfNecessary {
+            self.previewLayer?.session = nil
+            previewLayer?.session = self._captureSession
+            self.previewLayer = previewLayer
+        }
+    }
+    public func setPreviewLayerAndConfigSession(_ previewLayer: AVCaptureVideoPreviewLayer?) {
         executeClosureAsyncOnSessionQueueIfNecessary {
             if let session = self._captureSession, session.isRunning {
                 if previewLayer != nil {
