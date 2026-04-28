@@ -919,7 +919,7 @@ extension NextLevel {
                     } else {
                         previewLayer?.session = session
                         self.previewLayer = previewLayer
-                        self.commitConfiguration()
+                        self.beginConfiguration()
                         if self.captureMode == .photo {
                             if let movieOutput = self._movieFileOutput, session.outputs.contains(movieOutput) {
                                 session.removeOutput(movieOutput)
@@ -934,8 +934,10 @@ extension NextLevel {
                                 _ = self.addVideoOutput()
                             }
                         }
-                        self.beginConfiguration()
+                        self.commitConfiguration()
                     }
+                    self.updateVideoOrientation()
+                    self.updateVideoOutputSettings()
                 } else {
                     self.previewLayer?.session = nil
                     self.previewLayer = nil
@@ -948,6 +950,8 @@ extension NextLevel {
                         self._movieFileOutput = nil
                     }
                     self.commitConfiguration()
+                    self.updateVideoOrientation()
+                    self.updateVideoOutputSettings()
                 }
             } else {
                 self.previewLayer = previewLayer
