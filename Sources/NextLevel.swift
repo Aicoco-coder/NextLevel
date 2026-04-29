@@ -310,18 +310,22 @@ public class NextLevel: NSObject {
         self.delegate?.nextLevelCaptureModeWillChange(self)
 
         self.executeClosureAsyncOnSessionQueueIfNecessary {
-            self.captureSession?.stopRunning()
-            self._requestedDevice = self._currentDevice;
-            self.configureSession()
-            self.configureSessionDevices()
-            self.configureMetadataObjects()
-            self.updateVideoOrientation()
-            self.updateVideoOutputSettings()
-            self.captureSession?.startRunning()
+            self.reloadConfig()
             DispatchQueue.main.async {
                 self.delegate?.nextLevelCaptureModeDidChange(self)
             }
         }
+    }
+    
+    func reloadConfig() {
+        self.captureSession?.stopRunning()
+        self._requestedDevice = self._currentDevice;
+        self.configureSession()
+        self.configureSessionDevices()
+        self.configureMetadataObjects()
+        self.updateVideoOrientation()
+        self.updateVideoOutputSettings()
+        self.captureSession?.startRunning()
     }
 
     /// The current device position.
@@ -916,6 +920,12 @@ extension NextLevel {
     }
     public func setPreviewLayerAndConfigSession(_ previewLayer: AVCaptureVideoPreviewLayer?) {
         executeClosureAsyncOnSessionQueueIfNecessary {
+            
+            self.previewLayer?.session = nil
+            previewLayer?.session = self._captureSession
+            self.previewLayer = previewLayer
+            self.reloadConfig()
+            /*
             if let session = self._captureSession, session.isRunning {
                 if previewLayer != nil {
                     if self.previewLayer != nil {
@@ -961,7 +971,7 @@ extension NextLevel {
                 }
             } else {
                 self.previewLayer = previewLayer
-            }
+            }*/
         }
     }
 
@@ -1438,37 +1448,33 @@ extension NextLevel {
         if self._videoOutput == nil {
             self._videoOutput = AVCaptureVideoDataOutput()
             self._videoOutput?.alwaysDiscardsLateVideoFrames = false
-            if previewLayer != nil {
-                self._videoOutput?.videoSettings = nil
-            } else {
-                var videoSettings = [String(kCVPixelBufferPixelFormatTypeKey): Int(kCVPixelFormatType_32BGRA)]
-                #if !( targetEnvironment(simulator) )
-                    if let formatTypes = self._videoOutput?.availableVideoPixelFormatTypes {
-                        var supportsFullRange = false
-                        var supportsVideoRange = false
-                        var supportsBGRA = false
-                        for format in formatTypes {
-                            if format == Int(kCVPixelFormatType_32BGRA) {
-                                supportsBGRA = true
-                            }
-                            if format == Int(kCVPixelFormatType_420YpCbCr8BiPlanarFullRange) {
-                                supportsFullRange = true
-                            }
-                            if format == Int(kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange) {
-                                supportsVideoRange = true
-                            }
+            var videoSettings = [String(kCVPixelBufferPixelFormatTypeKey): Int(kCVPixelFormatType_32BGRA)]
+            #if !( targetEnvironment(simulator) )
+                if let formatTypes = self._videoOutput?.availableVideoPixelFormatTypes {
+                    var supportsFullRange = false
+                    var supportsVideoRange = false
+                    var supportsBGRA = false
+                    for format in formatTypes {
+                        if format == Int(kCVPixelFormatType_32BGRA) {
+                            supportsBGRA = true
                         }
-                        if supportsBGRA {
-                            videoSettings[String(kCVPixelBufferPixelFormatTypeKey)] = Int(kCVPixelFormatType_32BGRA)
-                        } else if supportsFullRange {
-                            videoSettings[String(kCVPixelBufferPixelFormatTypeKey)] = Int(kCVPixelFormatType_420YpCbCr8BiPlanarFullRange)
-                        } else if supportsVideoRange {
-                            videoSettings[String(kCVPixelBufferPixelFormatTypeKey)] = Int(kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange)
+                        if format == Int(kCVPixelFormatType_420YpCbCr8BiPlanarFullRange) {
+                            supportsFullRange = true
+                        }
+                        if format == Int(kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange) {
+                            supportsVideoRange = true
                         }
                     }
-                #endif
-                self._videoOutput?.videoSettings = videoSettings
-            }
+                    if supportsBGRA {
+                        videoSettings[String(kCVPixelBufferPixelFormatTypeKey)] = Int(kCVPixelFormatType_32BGRA)
+                    } else if supportsFullRange {
+                        videoSettings[String(kCVPixelBufferPixelFormatTypeKey)] = Int(kCVPixelFormatType_420YpCbCr8BiPlanarFullRange)
+                    } else if supportsVideoRange {
+                        videoSettings[String(kCVPixelBufferPixelFormatTypeKey)] = Int(kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange)
+                    }
+                }
+            #endif
+            self._videoOutput?.videoSettings = videoSettings
         }
 
         if let session = self._captureSession, let videoOutput = self._videoOutput {

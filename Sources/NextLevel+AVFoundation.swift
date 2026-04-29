@@ -355,7 +355,8 @@ extension AVCaptureDevice {
 
 extension AVCaptureDevice.Format {
     public var isTenBitFormat: Bool {
-        formatDescription.mediaSubType.rawValue == kCVPixelFormatType_420YpCbCr10BiPlanarVideoRange
+        formatDescription.mediaSubType.rawValue == kCVPixelFormatType_420YpCbCr10BiPlanarVideoRange ||
+        formatDescription.mediaSubType.rawValue == kCVPixelFormatType_420YpCbCr10BiPlanarFullRange
     }
     public var maxFrameRate: Double {
         videoSupportedFrameRateRanges.last?.maxFrameRate ?? 0
