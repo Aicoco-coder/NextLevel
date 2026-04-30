@@ -297,7 +297,7 @@ public class NextLevel: NSObject {
     /// The current capture mode of the device.
     public var captureMode: NextLevelCaptureMode = .video
     
-    public func switchCaptureMode(_ mode: NextLevelCaptureMode) {
+    public func switchCaptureMode(_ mode: NextLevelCaptureMode, requestedDevice: AVCaptureDevice? = nil) {
         guard self.captureMode != mode else {
             return
         }
@@ -310,6 +310,7 @@ public class NextLevel: NSObject {
         self.delegate?.nextLevelCaptureModeWillChange(self)
 
         self.executeClosureAsyncOnSessionQueueIfNecessary {
+            self._requestedDevice = requestedDevice ?? self._currentDevice;
             self.reloadConfig()
             DispatchQueue.main.async {
                 self.delegate?.nextLevelCaptureModeDidChange(self)
@@ -319,7 +320,6 @@ public class NextLevel: NSObject {
     
     func reloadConfig() {
         self.captureSession?.stopRunning()
-        self._requestedDevice = self._currentDevice;
         self.configureSession()
         self.configureSessionDevices()
         self.configureMetadataObjects()
@@ -924,6 +924,7 @@ extension NextLevel {
             self.previewLayer?.session = nil
             previewLayer?.session = self._captureSession
             self.previewLayer = previewLayer
+            self._requestedDevice = self._currentDevice;
             self.reloadConfig()
             /*
             if let session = self._captureSession, session.isRunning {
@@ -1802,9 +1803,12 @@ extension NextLevel {
     public func flipCaptureDevicePosition() {
         self.devicePosition = self.devicePosition == .back ? .front : .back
     }
-    public func setRequestedDevice(_ device: AVCaptureDevice?) {
+    public func setRequestedDevice(_ device: AVCaptureDevice?, reloadConfig: Bool = false) {
         self.executeClosureAsyncOnSessionQueueIfNecessary {
             self._requestedDevice = device
+            if reloadConfig {
+                self.reloadConfig()
+            }
         }
     }
     /// Changes capture device if the desired device is available.
