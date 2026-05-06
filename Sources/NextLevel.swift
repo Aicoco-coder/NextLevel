@@ -1524,13 +1524,13 @@ extension NextLevel {
                 if photoOutput.isPortraitEffectsMatteDeliverySupported {
                     photoOutput.isPortraitEffectsMatteDeliveryEnabled = self.photoConfiguration.isPortraitEffectsMatteEnabled
                 }
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-                    if #available(iOS 17.0, *) {
-                        if photoOutput.isZeroShutterLagSupported {
-                            photoOutput.isZeroShutterLagEnabled = self.photoConfiguration.isZeroShutterLagEnabled
-                            self.log("photoOutput.isZeroShutterLagEnabled = \(self.photoConfiguration.isZeroShutterLagEnabled)")
-                        }
+                if #available(iOS 17.0, *) {
+                    if photoOutput.isZeroShutterLagSupported {
+                        photoOutput.isZeroShutterLagEnabled = self.photoConfiguration.isZeroShutterLagEnabled
+                        self.log("photoOutput.isZeroShutterLagEnabled = \(self.photoConfiguration.isZeroShutterLagEnabled)")
                     }
+                }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
                     if self.is48MPEnabled {
                         self.is48MPEnabled = true
                     }
@@ -4351,13 +4351,13 @@ extension NextLevel {
                             currentDevice.activeColorSpace = .HLG_BT2020
                         }
                     } else {
-                        if activeFormat.supportedColorSpaces.contains(.P3_D65) {
-                            currentDevice.activeColorSpace = .P3_D65
+                        if activeFormat.supportedColorSpaces.contains(.sRGB) {
+                            currentDevice.activeColorSpace = .sRGB
                         }
                     }
                 } else {
-                    if activeFormat.supportedColorSpaces.contains(.P3_D65) {
-                        currentDevice.activeColorSpace = .P3_D65
+                    if activeFormat.supportedColorSpaces.contains(.sRGB) {
+                        currentDevice.activeColorSpace = .sRGB
                     }
                 }
                 currentDevice.unlockForConfiguration()
