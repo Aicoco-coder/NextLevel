@@ -507,6 +507,19 @@ public class NextLevel: NSObject {
         }
     }
     
+    private var _useProRAWPixelFormat: Bool = true
+    public var useProRAWPixelFormat: Bool {
+        set {
+            _useProRAWPixelFormat = newValue
+        }
+        get {
+            if #available(iOS 14.3, *) {
+                return _photoOutput?.isAppleProRAWEnabled == true && (_useProRAWPixelFormat || (is48MPEnabled && is48MPSupported))
+            } else {
+                return false
+            }
+        }
+    }
     public var stereoOrientation: Orientation = .portrait {
         didSet {
             if isRunning {
@@ -3134,13 +3147,6 @@ extension NextLevel {
 // MARK: - photo capture
 
 extension NextLevel {
-    public var useProRAWPixelFormat: Bool {
-        if #available(iOS 14.3, *) {
-            return _photoOutput?.isAppleProRAWEnabled == true && is48MPEnabled && is48MPSupported
-        } else {
-            return false
-        }
-    }
     /// Checks if a photo capture operation can be performed, based on available storage space and supported hardware functionality.
     public var canCapturePhoto: Bool {
         get {
@@ -3260,6 +3266,7 @@ extension NextLevel {
         } else {
             // Fallback on earlier versions
         }
+        log("photoSettings:\(photoSettings) useProRAWPixelFormat:\(useProRAWPixelFormat)")
         photoOutput.capturePhoto(with: photoSettings, delegate: self)
         completion?(photoSettings)
     }
