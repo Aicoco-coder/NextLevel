@@ -3252,6 +3252,9 @@ extension NextLevel {
                     photoSettings.maxPhotoDimensions = dimension48MP
                 }
             } else {
+                if !photoOutput.isHighResolutionCaptureEnabled {
+                    photoOutput.isHighResolutionCaptureEnabled = true
+                }
                 photoSettings.isHighResolutionPhotoEnabled = true
             }
         }
