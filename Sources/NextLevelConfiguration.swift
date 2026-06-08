@@ -388,7 +388,7 @@ public class NextLevelAudioConfiguration: NextLevelConfiguration {
         
         // 初始默认值
         var finalChannelsCount = 1
-        var hardwareLayoutData: Data? = nil
+        //var hardwareLayoutData: Data? = nil
         var hardwareChannelsCount: Int = 1
 
         // 2. 从 SampleBuffer 中提取硬件真实能力
@@ -409,10 +409,10 @@ public class NextLevelAudioConfiguration: NextLevelConfiguration {
             }
 
             // 提取硬件声道布局 (Channel Layout)
-            var layoutSize: Int = 0
-            if let currentChannelLayout = CMAudioFormatDescriptionGetChannelLayout(formatDescription, sizeOut: &layoutSize), layoutSize > 0 {
-                hardwareLayoutData = Data(bytes: currentChannelLayout, count: layoutSize)
-            }
+            //var layoutSize: Int = 0
+            //if let currentChannelLayout = CMAudioFormatDescriptionGetChannelLayout(formatDescription, sizeOut: &layoutSize), layoutSize > 0 {
+            //    hardwareLayoutData = Data(bytes: currentChannelLayout, count: layoutSize)
+            //}
         } else {
             // 如果没有 buffer（预初始化），使用默认设置或之前保存的设置
             finalChannelsCount = self.channelsCount ?? (NextLevelAudioConfiguration.AudioChannelsCountDefault)
@@ -424,9 +424,9 @@ public class NextLevelAudioConfiguration: NextLevelConfiguration {
         
         // 关键修复：只有当 Layout 的声道数与最终声道数一致时，才写入 AVChannelLayoutKey
         // 这样如果硬件是立体声，我们就能保留立体声布局；如果是单声道，也不会因冲突崩溃
-        if let layoutData = hardwareLayoutData, finalChannelsCount == hardwareChannelsCount {
-            config[AVChannelLayoutKey] = layoutData
-        }
+        //if let layoutData = hardwareLayoutData, finalChannelsCount == hardwareChannelsCount {
+        //    config[AVChannelLayoutKey] = layoutData
+        //}
 
         // 4. 其他常规音频参数设置
         if let bitRate = self.bitRate {
