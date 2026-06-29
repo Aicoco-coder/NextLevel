@@ -154,7 +154,7 @@ public protocol NextLevelVideoDelegate: AnyObject {
 
     // video processing
     @discardableResult
-    func nextLevel(_ nextLevel: NextLevel, willProcessRawVideoSampleBuffer sampleBuffer: CMSampleBuffer, onQueue queue: DispatchQueue) -> CMSampleBuffer?
+    func nextLevel(_ nextLevel: NextLevel, willProcessRawVideoSampleBuffer sampleBuffer: CMSampleBuffer, onQueue queue: DispatchQueue, shouldDropIfNil: inout Bool) -> CMSampleBuffer?
     func nextLevel(_ nextLevel: NextLevel, renderToCustomContextWithImageBuffer imageBuffer: CVPixelBuffer, onQueue queue: DispatchQueue)
 
     // ARKit video processing

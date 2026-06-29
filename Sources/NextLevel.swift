@@ -3490,30 +3490,37 @@ extension NextLevel: AVCaptureVideoDataOutputSampleBufferDelegate, AVCaptureAudi
     public func captureOutput(_ captureOutput: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {
         if self.captureMode == .photo && captureOutput == self._videoOutput {
             if let videoDelegate = self.videoDelegate {
-                videoDelegate.nextLevel(self, willProcessRawVideoSampleBuffer: sampleBuffer, onQueue: self._sessionQueue)
+                var drop = false
+                videoDelegate.nextLevel(self, willProcessRawVideoSampleBuffer: sampleBuffer, onQueue: self._sessionQueue, shouldDropIfNil:&drop)
             }
         } else if (self.captureMode == .videoWithoutAudio ||  self.captureMode == .arKitWithoutAudio) &&
             captureOutput == self._videoOutput {
-            var processedSampleBuffer = sampleBuffer;
+            var processedSampleBuffer: CMSampleBuffer? = sampleBuffer;
+            var drop = false
             if let videoDelegate = self.videoDelegate,
-                let sBuffer = videoDelegate.nextLevel(self, willProcessRawVideoSampleBuffer: sampleBuffer, onQueue: self._sessionQueue) {
+                let sBuffer = videoDelegate.nextLevel(self, willProcessRawVideoSampleBuffer: sampleBuffer, onQueue: self._sessionQueue, shouldDropIfNil: &drop) {
                 processedSampleBuffer = sBuffer
+            } else if drop {
+                processedSampleBuffer = nil
             }
             self._lastVideoFrame = processedSampleBuffer
-            if let session = self._recordingSession {
+            if let session = self._recordingSession, let processedSampleBuffer {
                 self.handleVideoOutput(sampleBuffer: processedSampleBuffer, session: session)
             }
         } else if let videoOutput = self._videoOutput,
             let audioOutput = self._audioOutput {
             switch captureOutput {
             case videoOutput:
-                var processedSampleBuffer = sampleBuffer;
+                var processedSampleBuffer: CMSampleBuffer? = sampleBuffer;
+                var drop = false
                 if let videoDelegate = self.videoDelegate,
-                    let sBuffer = videoDelegate.nextLevel(self, willProcessRawVideoSampleBuffer: sampleBuffer, onQueue: self._sessionQueue) {
+                   let sBuffer = videoDelegate.nextLevel(self, willProcessRawVideoSampleBuffer: sampleBuffer, onQueue: self._sessionQueue, shouldDropIfNil: &drop) {
                     processedSampleBuffer = sBuffer
+                } else if drop {
+                    processedSampleBuffer = nil
                 }
                 self._lastVideoFrame = processedSampleBuffer
-                if let session = self._recordingSession {
+                if let session = self._recordingSession, let processedSampleBuffer {
                     self.handleVideoOutput(sampleBuffer: processedSampleBuffer, session: session)
                 }
                 break
@@ -3529,7 +3536,7 @@ extension NextLevel: AVCaptureVideoDataOutputSampleBufferDelegate, AVCaptureAudi
         }
     }
     public func captureOutput(_ output: AVCaptureOutput, didDrop sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {
-        log("丢帧,presentationTimeStamp:\(sampleBuffer.presentationTimeStamp.seconds)")
+        print("丢帧,presentationTimeStamp:\(sampleBuffer.presentationTimeStamp.seconds)")
     }
 }
 
