@@ -3714,11 +3714,11 @@ extension NextLevel {
     }
 
     @objc internal func handleApplicationDidEnterBackground(_ notification: Notification) {
-        self.executeClosureAsyncOnSessionQueueIfNecessary {
-            if self.isRecording {
-                self.pause()
-            }
-        }
+//        self.executeClosureAsyncOnSessionQueueIfNecessary {
+//            if self.isRecording {
+//                self.pause()
+//            }
+//        }
     }
 
     // session

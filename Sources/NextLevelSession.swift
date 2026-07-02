@@ -322,6 +322,8 @@ extension NextLevelSession {
         do {
             self._writer = try AVAssetWriter(url: url, fileType: self.fileType)
             if let writer = self._writer {
+                // 设置分片写入：例如每隔 10 秒闭合并写入一次 moov 结构
+                writer.movieFragmentInterval = CMTime(seconds: 10, preferredTimescale: 600)
                 writer.shouldOptimizeForNetworkUse = true
                 writer.metadata = NextLevel.getAssetWriterMetadataBlock?() ?? NextLevel.assetWriterMetadata
 
