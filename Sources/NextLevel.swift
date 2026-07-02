@@ -135,6 +135,7 @@ public enum NextLevelDeviceType: Int, CustomStringConvertible {
 public enum NextLevelCaptureMode: Int, CustomStringConvertible {
     case video = 0
     case photo
+    case livePhoto
     case audio
     case videoWithoutAudio
     case movie
@@ -150,6 +151,8 @@ public enum NextLevelCaptureMode: Int, CustomStringConvertible {
                 return "Video without audio"
             case .photo:
                 return "Photo"
+            case .livePhoto:
+                return "livePhoto"
             case .audio:
                 return "Audio"
             case .movie:
@@ -705,7 +708,7 @@ extension NextLevel {
             return NextLevel.authorizationStatus(forMediaType: AVMediaType.video)
         case .movie:
             fallthrough
-        case .video:
+        case .video, .livePhoto:
             let audioStatus = NextLevel.authorizationStatus(forMediaType: AVMediaType.audio)
             let videoStatus = NextLevel.authorizationStatus(forMediaType: AVMediaType.video)
             return (audioStatus == .authorized && videoStatus == .authorized) ? .authorized : .notAuthorized
@@ -1189,7 +1192,7 @@ extension NextLevel {
         case .audio:
             shouldConfigureAudio = true
             break
-        case .video:
+        case .video, .livePhoto:
             shouldConfigureVideo = true
             shouldConfigureAudio = true
             break
@@ -1249,6 +1252,15 @@ extension NextLevel {
                 self.configureDevice(captureDevice: audioDevice, mediaType: AVMediaType.audio)
             }
         }
+        
+        if captureMode == .livePhoto, let photoOutput = _photoOutput {
+            if photoOutput.isLivePhotoCaptureSupported {
+                photoOutput.isLivePhotoCaptureEnabled = true
+                self.log("[livePhoto]设备支持并已开启 Live Photo")
+            } else {
+                self.log("[livePhoto]当前配置仍不支持 Live Photo。请确认：1.是否是真机 2.麦克风权限是否开启")
+            }
+        }
 
         self.commitConfiguration()
 
@@ -1298,7 +1310,7 @@ extension NextLevel {
             }
             #endif
             break
-        case .photo:
+        case .photo, .livePhoto:
             if session.sessionPreset != self.photoConfiguration.preset {
                 if session.canSetSessionPreset(self.photoConfiguration.preset) {
                     session.sessionPreset = self.photoConfiguration.preset
@@ -1706,7 +1718,13 @@ extension NextLevel {
                 self._audioOutput = nil
             }
             break
-        case .photo:
+//        case .livePhoto:
+//            if let movieOutput = self._movieFileOutput, session.outputs.contains(movieOutput) {
+//                session.removeOutput(movieOutput)
+//                self._movieFileOutput = nil
+//            }
+//            break
+        case .photo, .livePhoto:
             if let movieOutput = self._movieFileOutput, session.outputs.contains(movieOutput) {
                 session.removeOutput(movieOutput)
                 self._movieFileOutput = nil
@@ -3269,6 +3287,11 @@ extension NextLevel {
         } else {
             // Fallback on earlier versions
         }
+        if captureMode == .livePhoto, photoOutput.isLivePhotoCaptureEnabled {
+            let fileName = NSUUID().uuidString
+            let filePath = (NSTemporaryDirectory() as NSString).appendingPathComponent((fileName as NSString).appendingPathExtension("mov")!)
+            photoSettings.livePhotoMovieFileURL = URL(fileURLWithPath: filePath)
+        }
         log("photoSettings:\(photoSettings) useProRAWPixelFormat:\(useProRAWPixelFormat)")
         photoOutput.capturePhoto(with: photoSettings, delegate: self)
         completion?(photoSettings)
@@ -3488,7 +3511,7 @@ extension NextLevel {
 extension NextLevel: AVCaptureVideoDataOutputSampleBufferDelegate, AVCaptureAudioDataOutputSampleBufferDelegate {
 
     public func captureOutput(_ captureOutput: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {
-        if self.captureMode == .photo && captureOutput == self._videoOutput {
+        if (self.captureMode == .photo || self.captureMode == .livePhoto) && captureOutput == self._videoOutput {
             if let videoDelegate = self.videoDelegate {
                 var drop = false
                 videoDelegate.nextLevel(self, willProcessRawVideoSampleBuffer: sampleBuffer, onQueue: self._sessionQueue, shouldDropIfNil:&drop)
@@ -3613,6 +3636,9 @@ extension NextLevel: AVCapturePhotoCaptureDelegate {
     }
 
     public func photoOutput(_ output: AVCapturePhotoOutput, didFinishProcessingLivePhotoToMovieFileAt outputFileURL: URL, duration: CMTime, photoDisplayTime: CMTime, resolvedSettings: AVCaptureResolvedPhotoSettings, error: Error?) {
+        DispatchQueue.main.async {
+            self.photoDelegate?.nextLevel(self, didFinishProcessingLivePhotoToMovieFileAt: outputFileURL, duration: duration, photoDisplayTime: photoDisplayTime, resolvedSettings: resolvedSettings, error: error)
+        }
     }
 
 }
@@ -4121,6 +4147,9 @@ extension NextLevel {
 //                kCVPixelFormatType_420YpCbCr8BiPlanarFullRange: "fullRange"
 //            ]
             for format in currentDevice.formats {
+                if format.isVideoBinned {
+                    continue
+                }
                 // 1. 检查分辨率
                 let dimensions = CMVideoFormatDescriptionGetDimensions(format.formatDescription)
                 let subType = CMFormatDescriptionGetMediaSubType(format.formatDescription)
@@ -4210,7 +4239,7 @@ extension NextLevel {
                 debugString = "1080P"
                 resultPreset = .r1080P_f30
             case .r1080P_f60:
-                if let format = formatDict["format_r1080P_f60_fullRange"] {
+                if let format = formatDict["format_r1080P_f60_videoRange"] {
                     activeFormat = format
                     fps = 60
                     debugString = "1080P"
