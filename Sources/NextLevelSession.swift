@@ -324,7 +324,7 @@ extension NextLevelSession {
             if let writer = self._writer {
                 // 设置分片写入：例如每隔 10 秒闭合并写入一次 moov 结构
                 writer.movieFragmentInterval = CMTime(seconds: 10, preferredTimescale: 600)
-                writer.shouldOptimizeForNetworkUse = true
+                writer.shouldOptimizeForNetworkUse = false
                 writer.metadata = NextLevel.getAssetWriterMetadataBlock?() ?? NextLevel.assetWriterMetadata
 
                 if let videoInput = self._videoInput {
@@ -752,7 +752,7 @@ extension NextLevelSession {
                         if let firstAsset = self._clips.first?.asset {
                             exportSession.metadata = firstAsset.metadata
                         }
-                        exportSession.shouldOptimizeForNetworkUse = true
+                        exportSession.shouldOptimizeForNetworkUse = false
                         exportSession.outputURL = exportURL
                         exportSession.outputFileType = self.fileType
                         exportSession.exportAsynchronously {
