@@ -305,14 +305,32 @@ public class NextLevel: NSObject {
             return
         }
         self.captureMode = mode
-        
         guard self.isRunning else {
+            self.log("无法切换 captureMode self.isRunning == false")
             return
         }
-
         self.delegate?.nextLevelCaptureModeWillChange(self)
-
         self.executeClosureAsyncOnSessionQueueIfNecessary {
+            if (self.captureMode == .photo && mode == .livePhoto) || (self.captureMode == .livePhoto && mode == .photo) {
+                if let photoOutput = self._photoOutput {
+                    if photoOutput.isLivePhotoCaptureSupported {
+                        if mode == .livePhoto {
+                            photoOutput.isLivePhotoCaptureEnabled = true
+                            self.log("[livePhoto]已开启 Live Photo")
+                        } else {
+                            self.log("[livePhoto]已关闭 Live Photo")
+                            photoOutput.isLivePhotoCaptureEnabled = false
+                        }
+                        DispatchQueue.main.async {
+                            self.delegate?.nextLevelCaptureModeDidChange(self)
+                        }
+                        return
+                    } else {
+                        self.log("[livePhoto]当前配置仍不支持 Live Photo。请确认：1.是否是真机 2.麦克风权限是否开启")
+                    }
+                }
+            }
+            
             self._requestedDevice = requestedDevice ?? self._currentDevice;
             self.reloadConfig()
             DispatchQueue.main.async {
@@ -1186,13 +1204,14 @@ extension NextLevel {
         var shouldConfigureVideo = false
         var shouldConfigureAudio = false
         switch self.captureMode {
-        case .photo:
+        case .photo, .livePhoto:
             shouldConfigureVideo = true
+            shouldConfigureAudio = true
             break
         case .audio:
             shouldConfigureAudio = true
             break
-        case .video, .livePhoto:
+        case .video:
             shouldConfigureVideo = true
             shouldConfigureAudio = true
             break
@@ -1253,10 +1272,15 @@ extension NextLevel {
             }
         }
         
-        if captureMode == .livePhoto, let photoOutput = _photoOutput {
+        if (captureMode == .livePhoto || captureMode == .photo), let photoOutput = _photoOutput {
             if photoOutput.isLivePhotoCaptureSupported {
-                photoOutput.isLivePhotoCaptureEnabled = true
-                self.log("[livePhoto]设备支持并已开启 Live Photo")
+                if captureMode == .livePhoto {
+                    photoOutput.isLivePhotoCaptureEnabled = true
+                    self.log("[livePhoto]已开启 Live Photo")
+                } else {
+                    self.log("[livePhoto]已关闭 Live Photo")
+                    photoOutput.isLivePhotoCaptureEnabled = false
+                }
             } else {
                 self.log("[livePhoto]当前配置仍不支持 Live Photo。请确认：1.是否是真机 2.麦克风权限是否开启")
             }
@@ -1902,17 +1926,17 @@ extension NextLevel {
 
     internal func updateVideoOutputSettings() {
         if let videoOutput = self._videoOutput {
-            if captureMode == .video || captureMode == .videoWithoutAudio {
-                // 拍照模式下不要设置，否则拍照防抖就没有效果了
-                if let videoConnection = videoOutput.connection(with: AVMediaType.video) {
-                    if videoConnection.isVideoStabilizationSupported {
-                        videoConnection.preferredVideoStabilizationMode = self.videoStabilizationMode
-                    }
+            // 拍照模式下不要设置，否则拍照防抖就没有效果了
+            let stabilizationMode = (captureMode == .video || captureMode == .videoWithoutAudio) ? videoStabilizationMode : .off
+            log("captureMode=\(captureMode), stabilizationMode = \(stabilizationMode)")
+            if let videoConnection = videoOutput.connection(with: AVMediaType.video) {
+                if videoConnection.isVideoStabilizationSupported {
+                    videoConnection.preferredVideoStabilizationMode = stabilizationMode
                 }
-                if let previewLayer, let connection = previewLayer.connection {
-                    if connection.isVideoStabilizationSupported {
-                        connection.preferredVideoStabilizationMode = self.videoStabilizationMode
-                    }
+            }
+            if let previewLayer, let connection = previewLayer.connection {
+                if connection.isVideoStabilizationSupported {
+                    connection.preferredVideoStabilizationMode = stabilizationMode
                 }
             }
         }
