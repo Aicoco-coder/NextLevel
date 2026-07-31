@@ -304,6 +304,7 @@ public class NextLevel: NSObject {
         guard self.captureMode != mode else {
             return
         }
+        let oldCaptureMode = self.captureMode
         self.captureMode = mode
         guard self.isRunning else {
             self.log("无法切换 captureMode self.isRunning == false")
@@ -311,7 +312,7 @@ public class NextLevel: NSObject {
         }
         self.delegate?.nextLevelCaptureModeWillChange(self)
         self.executeClosureAsyncOnSessionQueueIfNecessary {
-            if (self.captureMode == .photo && mode == .livePhoto) || (self.captureMode == .livePhoto && mode == .photo) {
+            if (oldCaptureMode == .photo && mode == .livePhoto) || (oldCaptureMode == .livePhoto && mode == .photo) {
                 if let photoOutput = self._photoOutput {
                     if photoOutput.isLivePhotoCaptureSupported {
                         if mode == .livePhoto {
