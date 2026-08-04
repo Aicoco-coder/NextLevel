@@ -4114,154 +4114,345 @@ extension NextLevel {
 }
 
 extension NextLevel {
-
-    public enum VideoResolution: Int {
-        case r720P = 720
-        case r1080P = 1080
-        case r4K = 3840
-    }
-    public enum VideoFrame: Int {
-        case f24 = 24
-        case f25 = 25
-        case f30 = 30
-        case f50 = 50
-        case f60 = 60
+    public enum VideoPreset {
+        case r1080P_f30
+        case r1080P_f60
+        case r4K_f30
+        case r4K_f60
     }
     public var isSupportedHevc: Bool {
         let isSupported = VTIsHardwareDecodeSupported(kCMVideoCodecType_HEVC)
         return isSupported
     }
-
-    public func setVideoResolution(_ resolution: VideoResolution, frame: VideoFrame, enableHDR: Bool, completion:(((VideoResolution, VideoFrame)?, Bool)->Void)?) {
-        self.executeClosureAsyncOnSessionQueueIfNecessary { [weak self] in
-            guard let self, let currentDevice = self.currentDevice else {
-                completion?(nil, false)
+    public var supportedPresets: [VideoPreset] {
+        var videoPresets: [VideoPreset] = []
+        self.executeClosureSyncOnSessionQueueIfNecessary {
+            guard let currentDevice = self.currentDevice else {
                 return
             }
-
-            typealias FormatCandidate = (format: AVCaptureDevice.Format, resolution: VideoResolution, frame: VideoFrame)
-
-            let resolutions: [VideoResolution]
-            switch resolution {
-            case .r4K:
-                resolutions = [.r4K, .r1080P, .r720P]
-            case .r1080P:
-                resolutions = [.r1080P, .r720P]
-            case .r720P:
-                resolutions = [.r720P]
-            }
-
-            let frames: [VideoFrame] = [.f24, .f25, .f30, .f50, .f60]
-            let fallbackFrames = frames
-                .filter { $0.rawValue <= frame.rawValue }
-                .sorted { $0.rawValue > $1.rawValue }
-
-            func dimensionsMatch(_ dimensions: CMVideoDimensions, resolution: VideoResolution) -> Bool {
-                switch resolution {
-                case .r720P:
-                    return dimensions.width * dimensions.height == 1280 * 720
-                case .r1080P:
-                    return dimensions.width * dimensions.height == 1920 * 1080
-                case .r4K:
-                    return dimensions.width * dimensions.height == 3840 * 2160
-                }
-            }
-
-            func isHDRFormat(_ format: AVCaptureDevice.Format) -> Bool {
-                let subType = CMFormatDescriptionGetMediaSubType(format.formatDescription)
-                return subType == kCVPixelFormatType_420YpCbCr10BiPlanarFullRange ||
-                    subType == kCVPixelFormatType_420YpCbCr10BiPlanarVideoRange
-            }
-
-            func isSDRFormat(_ format: AVCaptureDevice.Format) -> Bool {
-                let subType = CMFormatDescriptionGetMediaSubType(format.formatDescription)
-                return subType == kCVPixelFormatType_420YpCbCr8BiPlanarFullRange ||
-                    subType == kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange
-            }
-
-            func isFullRangeFormat(_ format: AVCaptureDevice.Format) -> Bool {
-                let subType = CMFormatDescriptionGetMediaSubType(format.formatDescription)
-                return subType == kCVPixelFormatType_420YpCbCr8BiPlanarFullRange ||
-                    subType == kCVPixelFormatType_420YpCbCr10BiPlanarFullRange
-            }
-
-            func findFormat(hdr: Bool) -> FormatCandidate? {
-                for candidateResolution in resolutions {
-                    for candidateFrame in fallbackFrames {
-                        let matchingFormats = currentDevice.formats.filter { format in
-                            guard !format.isVideoBinned,
-                                  hdr ? isHDRFormat(format) : isSDRFormat(format) else {
-                                return false
-                            }
-                            let dimensions = CMVideoFormatDescriptionGetDimensions(format.formatDescription)
-                            guard dimensionsMatch(dimensions, resolution: candidateResolution) else {
-                                return false
-                            }
-                            let fps = Double(candidateFrame.rawValue)
-                            return format.videoSupportedFrameRateRanges.contains {
-                                $0.minFrameRate <= fps && $0.maxFrameRate >= fps
-                            }
+            for format in currentDevice.formats {
+                // 1. 检查分辨率
+                let dimensions = CMVideoFormatDescriptionGetDimensions(format.formatDescription)
+                if dimensions.width * dimensions.height == 1080 * 1920 {
+                    // 2. 检查帧率范围
+                    let ranges = format.videoSupportedFrameRateRanges
+                    for range in ranges {
+                        if range.minFrameRate <= 30 && range.maxFrameRate >= 30 {
+                            videoPresets.append(.r1080P_f30)
+                        } else if range.minFrameRate <= 60 && range.maxFrameRate >= 60 {
+                            videoPresets.append(.r1080P_f60)
                         }
-                        if let format = matchingFormats.first(where: isFullRangeFormat) ?? matchingFormats.first {
-                            return (format, candidateResolution, candidateFrame)
+                    }
+                } else if dimensions.width * dimensions.height == 3840 * 2160 {
+                    // 2. 检查帧率范围
+                    let ranges = format.videoSupportedFrameRateRanges
+                    for range in ranges {
+                        if range.minFrameRate <= 30 && range.maxFrameRate >= 30 {
+                            videoPresets.append(.r4K_f30)
+                        } else if range.minFrameRate <= 60 && range.maxFrameRate >= 60 {
+                            videoPresets.append(.r4K_f60)
                         }
                     }
                 }
-                return nil
             }
-
-            var isHDREnabled = enableHDR
-            var candidate = enableHDR ? findFormat(hdr: true) : findFormat(hdr: false)
-            if candidate == nil && enableHDR {
-                isHDREnabled = false
-                candidate = findFormat(hdr: false)
+        }
+        return videoPresets
+    }
+    public func setVideoPreset(_ preset: VideoPreset, enableHDR: Bool, completion:((VideoPreset?, Bool)->Void)?) {
+        self.executeClosureAsyncOnSessionQueueIfNecessary { [weak self] in
+            var resultPreset: VideoPreset? = nil
+            guard let self, let currentDevice = self.currentDevice else {
+                completion?(nil, enableHDR)
+                return
             }
-            guard let candidate else {
-                self.log("设置失败: 找不到支持 \(resolution.rawValue)P @ \(frame.rawValue)fps 的格式")
+            var formatDict: [String: AVCaptureDevice.Format] = [:]
+            //print("formatType:\(kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange),\(kCVPixelFormatType_420YpCbCr8BiPlanarFullRange)")
+//            let dict: [OSType: String] = [
+//                kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange: "videoRange",
+//                kCVPixelFormatType_420YpCbCr8BiPlanarFullRange: "fullRange"
+//            ]
+            for format in currentDevice.formats {
+                if format.isVideoBinned {
+                    continue
+                }
+                // 1. 检查分辨率
+                let dimensions = CMVideoFormatDescriptionGetDimensions(format.formatDescription)
+                let subType = CMFormatDescriptionGetMediaSubType(format.formatDescription)
+                if dimensions.width * dimensions.height == 1080 * 1920 {
+                    // 2. 检查帧率范围
+                    let ranges = format.videoSupportedFrameRateRanges
+                    for range in ranges {
+                        if range.maxFrameRate == 30 {
+                            if subType == kCVPixelFormatType_420YpCbCr10BiPlanarFullRange {
+                                formatDict["format_r1080P_f30_fullRange_hdr"] = format
+                            } else if subType == kCVPixelFormatType_420YpCbCr10BiPlanarVideoRange {
+                                formatDict["format_r1080P_f30_videoRange_hdr"] = format
+                            }
+                            if subType == kCVPixelFormatType_420YpCbCr8BiPlanarFullRange {
+                                formatDict["format_r1080P_f30_fullRange"] = format
+                            } else if subType == kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange {
+                                formatDict["format_r1080P_f30_videoRange"] = format
+                            }
+                            //print("format:\(format) -> \(dict[subType] ?? "unknow")")
+                        } else if range.maxFrameRate == 60 {
+                            if subType == kCVPixelFormatType_420YpCbCr10BiPlanarFullRange {
+                                formatDict["format_r1080P_f60_fullRange_hdr"] = format
+                            } else if subType == kCVPixelFormatType_420YpCbCr10BiPlanarVideoRange {
+                                formatDict["format_r1080P_f60_videoRange_hdr"] = format
+                            }
+                            if subType == kCVPixelFormatType_420YpCbCr8BiPlanarFullRange {
+                                formatDict["format_r1080P_f60_fullRange"] = format
+                            } else if subType == kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange {
+                                formatDict["format_r1080P_f60_videoRange"] = format
+                            }
+                            //print("format:\(format) -> \(dict[subType] ?? "unknow")")
+                        }
+                    }
+                } else if dimensions.width * dimensions.height == 3840 * 2160 {
+                    // 2. 检查帧率范围
+                    let ranges = format.videoSupportedFrameRateRanges
+                    for range in ranges {
+                        if range.maxFrameRate == 30 {
+                            if subType == kCVPixelFormatType_420YpCbCr10BiPlanarFullRange {
+                                formatDict["format_r4K_f30_fullRange_hdr"] = format
+                            } else if subType == kCVPixelFormatType_420YpCbCr10BiPlanarVideoRange {
+                                formatDict["format_r4K_f30_videoRange_hdr"] = format
+                            }
+                            if subType == kCVPixelFormatType_420YpCbCr8BiPlanarFullRange {
+                                formatDict["format_r4K_f30_fullRange"] = format
+                            } else if subType == kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange {
+                                formatDict["format_r4K_f30_videoRange"] = format
+                            }
+                            //print("format:\(format) -> \(dict[subType] ?? "unknow")")
+                        } else if range.maxFrameRate == 60 {
+                            if subType == kCVPixelFormatType_420YpCbCr10BiPlanarFullRange {
+                                formatDict["format_r4K_f60_fullRange_hdr"] = format
+                            } else if subType == kCVPixelFormatType_420YpCbCr10BiPlanarVideoRange {
+                                formatDict["format_r4K_f60_videoRange_hdr"] = format
+                            }
+                            if subType == kCVPixelFormatType_420YpCbCr8BiPlanarFullRange {
+                                formatDict["format_r4K_f60_fullRange"] = format
+                            } else if subType == kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange {
+                                formatDict["format_r4K_f60_videoRange"] = format
+                            }
+                            //print("format:\(format) -> \(dict[subType] ?? "unknow")")
+                        }
+                    }
+                }
+            }
+            var activeFormat: AVCaptureDevice.Format?
+            var fps: Int = 30
+            var debugString = ""
+            var isHDREnabled: Bool = enableHDR
+            switch preset {
+            case .r1080P_f30:
+                if let format = formatDict["format_r1080P_f30_fullRange"] {
+                    activeFormat = format
+                } else if let format = formatDict["format_r1080P_f30_videoRange"] {
+                    activeFormat = format
+                }
+                if enableHDR {
+                    if let format = formatDict["format_r1080P_f30_fullRange_hdr"] {
+                        activeFormat = format
+                    } else if let format = formatDict["format_r1080P_f30_videoRange_hdr"] {
+                        activeFormat = format
+                    } else {
+                        isHDREnabled = false
+                    }
+                }
+                fps = 30
+                debugString = "1080P"
+                resultPreset = .r1080P_f30
+            case .r1080P_f60:
+                if let format = formatDict["format_r1080P_f60_videoRange"] {
+                    activeFormat = format
+                    fps = 60
+                    debugString = "1080P"
+                    resultPreset = .r1080P_f60
+                } else if let format = formatDict["format_r1080P_f60_videoRange"] {
+                    activeFormat = format
+                    fps = 60
+                    debugString = "1080P"
+                    resultPreset = .r1080P_f60
+                } else if let format = formatDict["format_r1080P_f30_fullRange"] {
+                    activeFormat = format
+                    fps = 30
+                    debugString = "1080P"
+                    resultPreset = .r1080P_f30
+                } else if let format = formatDict["format_r1080P_f30_videoRange"] {
+                    activeFormat = format
+                    fps = 30
+                    debugString = "1080P"
+                    resultPreset = .r1080P_f30
+                }
+                if enableHDR {
+                    if let format = formatDict["format_r1080P_f60_fullRange_hdr"] {
+                        activeFormat = format
+                    } else if let format = formatDict["format_r1080P_f60_videoRange_hdr"] {
+                        activeFormat = format
+                    } else if let format = formatDict["format_r1080P_f30_fullRange_hdr"] {
+                        activeFormat = format
+                    } else if let format = formatDict["format_r1080P_f30_videoRange_hdr"] {
+                        activeFormat = format
+                    } else {
+                        isHDREnabled = false
+                    }
+                }
+            case .r4K_f30:
+                if let format = formatDict["format_r4K_f30_fullRange"] {
+                    activeFormat = format
+                    fps = 30
+                    debugString = "4K"
+                    resultPreset = .r4K_f30
+                } else if let format = formatDict["format_r4K_f30_videoRange"] {
+                    activeFormat = format
+                    fps = 30
+                    debugString = "4K"
+                    resultPreset = .r4K_f30
+                } else if let format = formatDict["format_r1080P_f30_fullRange"] {
+                    activeFormat = format
+                    fps = 30
+                    debugString = "1080P"
+                    resultPreset = .r1080P_f30
+                } else if let format = formatDict["format_r1080P_f30_videoRange"] {
+                    activeFormat = format
+                    fps = 30
+                    debugString = "1080P"
+                    resultPreset = .r1080P_f30
+                }
+                if enableHDR {
+                    if let format = formatDict["format_r4K_f30_fullRange_hdr"] {
+                        activeFormat = format
+                    } else if let format = formatDict["format_r4K_f30_videoRange_hdr"] {
+                        activeFormat = format
+                    } else if let format = formatDict["format_r1080P_f30_fullRange_hdr"] {
+                        activeFormat = format
+                    } else if let format = formatDict["format_r1080P_f30_videoRange_hdr"] {
+                        activeFormat = format
+                    } else {
+                        isHDREnabled = false
+                    }
+                }
+            case .r4K_f60:
+                if let format = formatDict["format_r4K_f60_fullRange"] {
+                    activeFormat = format
+                    fps = 60
+                    debugString = "4K"
+                    resultPreset = .r4K_f60
+                } else if let format = formatDict["format_r4K_f60_videoRange"] {
+                    activeFormat = format
+                    fps = 60
+                    debugString = "4K"
+                    resultPreset = .r4K_f60
+                } else if let format = formatDict["format_r4K_f30_fullRange"] {
+                    activeFormat = format
+                    fps = 30
+                    debugString = "4K"
+                    resultPreset = .r4K_f30
+                } else if let format = formatDict["format_r4K_f30_videoRange"] {
+                    activeFormat = format
+                    fps = 30
+                    debugString = "4K"
+                    resultPreset = .r4K_f30
+                } else if let format = formatDict["format_r1080P_f60_fullRange"] {
+                    activeFormat = format
+                    fps = 60
+                    debugString = "1080P"
+                    resultPreset = .r1080P_f60
+                } else if let format = formatDict["format_r1080P_f60_videoRange"] {
+                    activeFormat = format
+                    fps = 60
+                    debugString = "1080P"
+                    resultPreset = .r1080P_f60
+                } else if let format = formatDict["format_r1080P_f30_fullRange"] {
+                    activeFormat = format
+                    fps = 30
+                    debugString = "1080P"
+                    resultPreset = .r1080P_f30
+                } else if let format = formatDict["format_r1080P_f30_videoRange"] {
+                    activeFormat = format
+                    fps = 30
+                    debugString = "1080P"
+                    resultPreset = .r1080P_f30
+                }
+                if enableHDR {
+                    if let format = formatDict["format_r4K_f60_fullRange_hdr"] {
+                        activeFormat = format
+                    } else if let format = formatDict["format_r4K_f60_videoRange_hdr"] {
+                        activeFormat = format
+                    } else if let format = formatDict["format_r4K_f30_fullRange_hdr"] {
+                        activeFormat = format
+                    } else if let format = formatDict["format_r4K_f30_videoRange_hdr"] {
+                        activeFormat = format
+                    } else if let format = formatDict["format_r1080P_f60_fullRange_hdr"] {
+                        activeFormat = format
+                    } else if let format = formatDict["format_r1080P_f60_videoRange_hdr"] {
+                        activeFormat = format
+                    } else if let format = formatDict["format_r1080P_f30_fullRange_hdr"] {
+                        activeFormat = format
+                    } else if let format = formatDict["format_r1080P_f30_videoRange_hdr"] {
+                        activeFormat = format
+                    } else {
+                        isHDREnabled = false
+                    }
+                }
+            }
+            guard let activeFormat else {
+                self.log("设置失败:activeFormat = nil")
                 completion?(nil, false)
                 return
             }
-
-            self.beginConfiguration()
-            defer {
-                self.commitConfiguration()
+            guard activeFormat != currentDevice.activeFormat else {
+                self.log("activeFormat == currentDevice.activeFormat")
+                completion?(resultPreset, isHDREnabled)
+                return
             }
-
+            self.beginConfiguration()
             do {
                 try currentDevice.lockForConfiguration()
-                defer {
-                    currentDevice.unlockForConfiguration()
+                
+                currentDevice.activeFormat = activeFormat
+                if let frameRate = activeFormat.videoSupportedFrameRateRanges.first(where: {Int($0.maxFrameRate) == fps}) ?? activeFormat.videoSupportedFrameRateRanges.first {
+                    currentDevice.activeVideoMinFrameDuration = frameRate.minFrameDuration
+                    currentDevice.activeVideoMaxFrameDuration = frameRate.minFrameDuration
                 }
-
-                currentDevice.activeFormat = candidate.format
-                let frameDuration = CMTime(value: 1, timescale: CMTimeScale(candidate.frame.rawValue))
-                currentDevice.activeVideoMinFrameDuration = frameDuration
-                currentDevice.activeVideoMaxFrameDuration = frameDuration
-
-                if #available(iOS 14.1, *),
-                   isHDREnabled,
-                   candidate.format.supportedColorSpaces.contains(.HLG_BT2020) {
-                    currentDevice.activeColorSpace = .HLG_BT2020
-                } else if candidate.format.supportedColorSpaces.contains(.sRGB) {
-                    currentDevice.activeColorSpace = .sRGB
+                if #available(iOS 14.1, *) {
+                    if isHDREnabled {
+                        if activeFormat.supportedColorSpaces.contains(.HLG_BT2020) {
+                            currentDevice.activeColorSpace = .HLG_BT2020
+                        }
+                    } else {
+                        if activeFormat.supportedColorSpaces.contains(.sRGB) {
+                            currentDevice.activeColorSpace = .sRGB
+                        }
+                    }
+                } else {
+                    if activeFormat.supportedColorSpaces.contains(.sRGB) {
+                        currentDevice.activeColorSpace = .sRGB
+                    }
                 }
+                currentDevice.unlockForConfiguration()
+                self.log("成功切换至: \(debugString) @ \(fps)fps format:\(currentDevice.activeFormat), isHDREnabled:\(isHDREnabled)")
+                completion?(resultPreset, isHDREnabled)
             } catch {
                 self.log("锁定设备失败: \(error)")
                 completion?(nil, false)
-                return
             }
-
             if isHDREnabled {
-                if self._movieFileOutput == nil && !self.addMovieOutput() {
-                    self._movieFileOutput = nil
+                if self._movieFileOutput == nil {
+                    //添加AVCaptureMovieFileOutput会使预览画面的HDR效果更亮，更接近系统相机，如果不加对比度和亮度都比较低
+                    if !self.addMovieOutput() {
+                        self._movieFileOutput = nil
+                    }
                 }
-            } else if let movieOutput = self._movieFileOutput,
-                      self.remove(output: movieOutput) {
-                self._movieFileOutput = nil
+            } else {
+                if let movieOutput = self._movieFileOutput {
+                    if self.remove(output: movieOutput) {
+                        self._movieFileOutput = nil
+                    }
+                }
             }
-
-            self.log("成功切换至: \(candidate.resolution.rawValue)P @ \(candidate.frame.rawValue)fps format:\(currentDevice.activeFormat), isHDREnabled:\(isHDREnabled)")
-            completion?((candidate.resolution, candidate.frame), isHDREnabled)
+            self.commitConfiguration()
         }
     }
 }
