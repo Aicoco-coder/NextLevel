@@ -2169,8 +2169,8 @@ extension NextLevel {
         }
         set {
             guard let device = self._currentDevice,
-                //device.focusMode == .locked,
-                device.isFocusModeSupported(.locked)
+                  device.isLockingFocusWithCustomLensPositionSupported,
+                  device.isFocusModeSupported(.locked)
                 else {
                     return
             }
@@ -2572,6 +2572,25 @@ extension NextLevel {
                 let newTint = newValue.clamped(to: self.whiteBalanceTintRange)
                 let temperatureAndTint = AVCaptureDevice.WhiteBalanceTemperatureAndTintValues(temperature: self.whiteBalanceTemperature, tint: newTint)
                 let newWhiteBalanceGains = device.deviceWhiteBalanceGains(for: temperatureAndTint)
+                self.adjustWhiteBalanceGains(newWhiteBalanceGains)
+            }
+        }
+    }
+    
+    public var whiteBalanceTemperatureAndTint: AVCaptureDevice.WhiteBalanceTemperatureAndTintValues? {
+        get {
+            if let device = self._currentDevice {
+                let whiteBalanceGains = device.deviceWhiteBalanceGains.normalize(device)
+                return device.temperatureAndTintValues(for: whiteBalanceGains)
+            }
+            return nil
+        }
+        set {
+            self.executeClosureAsyncOnSessionQueueIfNecessary {
+                guard let device = self._currentDevice, let temperatureAndTintValue = newValue else {
+                    return
+                }
+                let newWhiteBalanceGains = device.deviceWhiteBalanceGains(for: temperatureAndTintValue)
                 self.adjustWhiteBalanceGains(newWhiteBalanceGains)
             }
         }
